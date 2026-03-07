@@ -1,5 +1,8 @@
 """Home page for Streamlit app."""
 import streamlit as st
+import rasterio
+import numpy as np
+import matplotlib.pyplot as plt
 from src.config_parameters import params
 from src.utils import (
     add_about,
@@ -7,7 +10,6 @@ from src.utils import (
     set_home_page_style,
     toggle_menu_button,
 )
-
 # Page configuration
 st.set_page_config(layout="wide", page_title=params["browser_title"])
 
@@ -133,3 +135,57 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+"""Flood Mapping Visualization Page"""
+
+st.set_page_config(layout="wide", page_title="Flood Mapping")
+
+st.title("🌊 SAR Flood Mapping Visualization")
+
+st.markdown(
+"""
+This page visualizes SAR flood mapping samples using **Sentinel-1 SAR images**,
+**Sentinel-2 optical images**, and **flood labels**.
+"""
+)
+
+# File paths
+S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
+S2_PATH = "Sample/S2/Spain_7370579_S2Hand.tif"
+LABEL_PATH = "Sample/Labels/Spain_7370579_LabelHand.tif"
+
+
+# Function to read raster
+def load_raster(path):
+    with rasterio.open(path) as src:
+        img = src.read(1)
+    return img
+
+
+# Load images
+try:
+    s1 = load_raster(S1_PATH)
+    s2 = load_raster(S2_PATH)
+    label = load_raster(LABEL_PATH)
+except Exception as e:
+    st.error(f"Error loading files: {e}")
+    st.stop()
+
+
+# Plot images
+fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+
+ax[0].imshow(s1, cmap="gray")
+ax[0].set_title("Sentinel-1 SAR Image")
+
+ax[1].imshow(s2, cmap="terrain")
+ax[1].set_title("Sentinel-2 Optical Image")
+
+ax[2].imshow(label, cmap="Blues")
+ax[2].set_title("Flood Label")
+
+for a in ax:
+    a.axis("off")
+
+st.pyplot(fig)
+
+st.success("Flood sample loaded successfully.")
