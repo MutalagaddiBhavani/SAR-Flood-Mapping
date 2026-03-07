@@ -22,22 +22,22 @@ set_home_page_style()
 st.markdown("# Home")
 st.markdown("## Introduction")
 st.markdown(f"""
-This tool estimates flood extent using **Sentinel-1 SAR data**.<br><br>
+This tool estimates flood extent in **Karnataka** using **Sentinel-1 SAR data**.<br><br>
 Methodology: <a href='{params['url_unspider_tutorial']}'>UN-SPIDER Guide</a> | 
 <a href='{params['url_gee']}'>Google Earth Engine</a>
 """, unsafe_allow_html=True)
 
 st.markdown("## How to use the tool")
 st.markdown("""
-1. Check flood risk per **station zone**.  
-2. Each rescuer accesses their **assigned station/zone**.  
-3. Station color indicates flood risk: 🔵 Monitoring, 🟢 Safe, 🟠 Active Alert, 🔴 Critical.  
-4. 24-hour and weekly trends help plan rescues.
+1. Select your **station/zone** in Karnataka.  
+2. Check flood risk color for your zone: 🔵 Monitoring, 🟢 Safe, 🟠 Active Alert, 🔴 Critical.  
+3. View 24-hour monitoring and weekly flood report for your zone.  
+4. Respond to alerts if risk is Active Alert or Critical.
 """, unsafe_allow_html=True)
 
 # ---------------- FLOOD VISUALIZATION ---------------- #
 st.markdown("---")
-st.title("🌊 SAR Flood Mapping Visualization")
+st.title("🌊 SAR Flood Mapping Visualization (Karnataka)")
 
 # Sample file paths
 S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
@@ -69,19 +69,19 @@ for a in ax:
 st.pyplot(fig)
 st.success("Flood sample loaded successfully.")
 
-# ---------------- STATIONS & ZONES ---------------- #
+# ---------------- KARNATAKA STATIONS ---------------- #
 st.markdown("---")
-st.title("🌏 Station Zone Monitoring")
+st.title("🌏 Karnataka Flood Monitoring Zones")
 
 directions = ["N","NE","E","SE","S","SW","W","NW"]
 risk_levels = ["Monitoring", "Safe", "Active Alert", "Critical"]
 color_map = {"Monitoring":"blue", "Safe":"green", "Active Alert":"orange", "Critical":"red"}
 
-# Create stations for 8 directions
+# Create stations for Karnataka zones
 stations = {}
-base_lat, base_lon = 20.5, 78.5  # example central point
+base_lat, base_lon = 15.3, 75.1  # Karnataka central approx.
 for i, dir in enumerate(directions):
-    stations[f"Station {dir}"] = {
+    stations[f"Karnataka Station {dir}"] = {
         "lat": base_lat + 0.1*(i%3),
         "lon": base_lon + 0.1*(i//3),
         "zone": dir,
@@ -91,7 +91,7 @@ for i, dir in enumerate(directions):
 # ---------------- RESCUER LOGIN ---------------- #
 st.markdown("## Rescuer Access")
 station_names = list(stations.keys())
-assigned_station = st.selectbox("Select your station:", station_names)
+assigned_station = st.selectbox("Select your station/zone:", station_names)
 station_data = stations[assigned_station]
 
 st.markdown(f"**Assigned Zone:** {station_data['zone']}")
