@@ -1,148 +1,145 @@
-# app.py
+"""SAR Flood Monitoring App - Karnataka (Home + Login + Dashboard)"""
 import streamlit as st
 import rasterio
-import numpy as np
 import matplotlib.pyplot as plt
 import folium
 from streamlit_folium import st_folium
-import pandas as pd
-import random
 
-from src.config_parameters import params
-from src.utils import add_about, add_logo, set_home_page_style, toggle_menu_button
+# ----------------- APP CONFIG ----------------- #
+st.set_page_config(page_title="SAR Flood Monitoring - Karnataka", layout="wide")
 
-# ---------------- PAGE CONFIG ---------------- #
-st.set_page_config(layout="wide", page_title=params["browser_title"])
-toggle_menu_button()
-add_logo("MA-logo.png")
-add_about()
-set_home_page_style()
+# ----------------- SESSION STATE ----------------- #
+if "users" not in st.session_state:
+    st.session_state.users = {}  # dynamic username:password
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
 
-# ---------------- HOME PAGE ---------------- #
-st.markdown("# Home")
-st.markdown("## Introduction")
-st.markdown(f"""
-This tool estimates flood extent in **Karnataka** using **Sentinel-1 SAR data**.<br><br>
-Methodology: <a href='{params['url_unspider_tutorial']}'>UN-SPIDER Guide</a> | 
-<a href='{params['url_gee']}'>Google Earth Engine</a>
-""", unsafe_allow_html=True)
+# ----------------- HOME PAGE ----------------- #
+st.title("🏠 Karnataka SAR Flood Monitoring Tool")
 
-st.markdown("## How to use the tool")
 st.markdown("""
-1. Select your **station/zone** in Karnataka.  
-2. Check flood risk color for your zone: 🔵 Monitoring, 🟢 Safe, 🟠 Active Alert, 🔴 Critical.  
-3. View 24-hour monitoring and weekly flood report for your zone.  
-4. Respond to alerts if risk is Active Alert or Critical.
-""", unsafe_allow_html=True)
+## Introduction
+This tool allows estimating flood extent using **Sentinel-1 SAR data**.
 
-# ---------------- FLOOD VISUALIZATION ---------------- #
+The methodology is based on a recommended practice by the UN-SPIDER and uses satellite datasets processed on **Google Earth Engine**.
+""")
+
+st.markdown("""
+## How to use the tool
+1. Signup/Login as a rescuer.
+2. Select a Station to see districts under it.
+3. View SAR flood samples.
+4. Monitor weekly flood chances.
+""")
+
 st.markdown("---")
-st.title("🌊 SAR Flood Mapping Visualization (Karnataka)")
 
-# Sample file paths
-S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
-S2_PATH = "Sample/S2/Spain_7370579_S2Hand.tif"
-LABEL_PATH = "Sample/Labels/Spain_7370579_LabelHand.tif"
+# ----------------- LOGIN / SIGNUP ----------------- #
+st.header("🔑 Rescuer Access")
+tab1, tab2 = st.tabs(["Login", "Signup"])
 
-def load_raster(path):
-    with rasterio.open(path) as src:
-        img = src.read(1)
-    return img
+with tab1:
+    st.subheader("Login")
+    login_user = st.text_input("Username", key="login_user")
+    login_pass = st.text_input("Password", type="password", key="login_pass")
+    if st.button("Login"):
+        if login_user in st.session_state.users and st.session_state.users[login_user] == login_pass:
+            st.session_state.logged_in = True
+            st.session_state.username = login_user
+            st.success(f"Welcome back, {login_user}!")
+            st.experimental_rerun()
+        else:
+            st.error("Invalid username or password")
 
-try:
-    s1 = load_raster(S1_PATH)
-    s2 = load_raster(S2_PATH)
-    label = load_raster(LABEL_PATH)
-except Exception as e:
-    st.error(f"Error loading files: {e}")
-    st.stop()
+with tab2:
+    st.subheader("Signup")
+    signup_user = st.text_input("Choose Username", key="signup_user")
+    signup_pass = st.text_input("Choose Password", type="password", key="signup_pass")
+    if st.button("Signup"):
+        if signup_user in st.session_state.users:
+            st.error("Username already exists")
+        elif signup_user == "" or signup_pass == "":
+            st.warning("Enter both username and password")
+        else:
+            st.session_state.users[signup_user] = signup_pass
+            st.success(f"Account created for {signup_user}! Please login now.")
 
-fig, ax = plt.subplots(1, 3, figsize=(18,6))
-ax[0].imshow(s1, cmap="gray")
-ax[0].set_title("Sentinel-1 SAR Image")
-ax[1].imshow(s2, cmap="terrain")
-ax[1].set_title("Sentinel-2 Optical Image")
-ax[2].imshow(label, cmap="Blues")
-ax[2].set_title("Flood Label")
-for a in ax:
-    a.axis("off")
-st.pyplot(fig)
-st.success("Flood sample loaded successfully.")
+# ----------------- MAIN DASHBOARD ----------------- #
+if st.session_state.logged_in:
+    st.markdown("---")
+    st.header(f"🏡 Welcome {st.session_state.username} - Karnataka Dashboard")
 
-# ---------------- KARNATAKA STATIONS ---------------- #
-st.markdown("---")
-st.title("🌏 Karnataka Flood Monitoring Zones")
+    # ----------------- SAMPLE SAR VISUALIZATION ----------------- #
+    st.subheader("🌊 SAR Flood Mapping Sample")
+    S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
+    S2_PATH = "Sample/S2/Spain_7370579_S2Hand.tif"
+    LABEL_PATH = "Sample/Labels/Spain_7370579_LabelHand.tif"
 
-directions = ["N","NE","E","SE","S","SW","W","NW"]
-risk_levels = ["Monitoring", "Safe", "Active Alert", "Critical"]
-color_map = {"Monitoring":"blue", "Safe":"green", "Active Alert":"orange", "Critical":"red"}
+    def load_raster(path):
+        with rasterio.open(path) as src:
+            return src.read(1)
 
-# Create stations for Karnataka zones
-stations = {}
-base_lat, base_lon = 15.3, 75.1  # Karnataka central approx.
-for i, dir in enumerate(directions):
-    stations[f"Karnataka Station {dir}"] = {
-        "lat": base_lat + 0.1*(i%3),
-        "lon": base_lon + 0.1*(i//3),
-        "zone": dir,
-        "risk": random.choices(risk_levels, weights=[0.3,0.3,0.2,0.2], k=1)[0]
+    try:
+        s1 = load_raster(S1_PATH)
+        s2 = load_raster(S2_PATH)
+        label = load_raster(LABEL_PATH)
+    except Exception as e:
+        st.error(f"Error loading SAR/Label files: {e}")
+        st.stop()
+
+    fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    ax[0].imshow(s1, cmap="gray"); ax[0].set_title("Sentinel-1 SAR")
+    ax[1].imshow(s2, cmap="terrain"); ax[1].set_title("Sentinel-2 Optical")
+    ax[2].imshow(label, cmap="Blues"); ax[2].set_title("Flood Label")
+    for a in ax: a.axis("off")
+    st.pyplot(fig)
+
+    # ----------------- STATIONS & DISTRICTS ----------------- #
+    st.subheader("📍 Karnataka Stations")
+    stations = {
+        "Station North": ["Bangalore Rural", "Chikmagalur", "Belgaum"],
+        "Station East": ["Kolar", "Chikkaballapur", "Tumkur"],
+        "Station South": ["Mysore", "Chamarajanagar", "Mandya"],
+        "Station West": ["Udupi", "Dakshina Kannada", "Karwar"]
     }
 
-# ---------------- RESCUER LOGIN ---------------- #
-st.markdown("## Rescuer Access")
-station_names = list(stations.keys())
-assigned_station = st.selectbox("Select your station/zone:", station_names)
-station_data = stations[assigned_station]
+    selected_station = st.selectbox("Select a Station", list(stations.keys()))
+    st.markdown(f"### Districts under **{selected_station}**")
+    st.write(", ".join(stations[selected_station]))
 
-st.markdown(f"**Assigned Zone:** {station_data['zone']}")
-st.markdown(f"**Current Flood Risk:** {station_data['risk']} : {color_map[station_data['risk']].upper()}")
+    # ----------------- FOLIUM MAP ----------------- #
+    st.subheader("🗺️ Station Map")
+    m = folium.Map(location=[13.0, 76.0], zoom_start=7)
+    station_coords = {
+        "Station North": [15.5, 75.0],
+        "Station East": [14.0, 77.0],
+        "Station South": [12.5, 76.5],
+        "Station West": [14.5, 74.5]
+    }
+    for name, coords in station_coords.items():
+        folium.Marker(
+            location=coords,
+            popup=f"{name} | Districts: {', '.join(stations[name])}",
+            icon=folium.Icon(color="blue")
+        ).add_to(m)
 
-if station_data["risk"] in ["Critical","Active Alert"]:
-    st.warning(f"🚨 Immediate action required for {assigned_station}!")
+    st_folium(m, width=700, height=500)
 
-# ---------------- STATION MAP ---------------- #
-m = folium.Map(location=[station_data["lat"], station_data["lon"]], zoom_start=7)
-for name, data in stations.items():
-    folium.Marker(
-        location=[data["lat"], data["lon"]],
-        popup=f"{name} | Zone: {data['zone']} | Risk: {data['risk']}",
-        icon=folium.Icon(color=color_map[data["risk"]], icon="tint", prefix='fa')
-    ).add_to(m)
-st_folium(m, width=700, height=500)
+    # ----------------- WEEKLY FLOOD REPORT ----------------- #
+    st.subheader("📊 Weekly Flood Chance Report")
+    days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+    flood_chances = [20, 35, 50, 40, 30, 25, 45]  # Example %
+    fig2, ax2 = plt.subplots()
+    ax2.plot(days, flood_chances, marker="o", color="blue")
+    ax2.set_ylim(0,100)
+    ax2.set_ylabel("Flood Chance (%)")
+    ax2.set_title("Karnataka Weekly Flood Monitoring")
+    st.pyplot(fig2)
 
-# ---------------- 24-HOUR MONITORING ---------------- #
-st.markdown("---")
-st.markdown("## ⏱ 24-Hour Monitoring for Your Zone")
-hours = list(range(24))
-zone_monitor = [random.choice(risk_levels) for _ in hours]
-df_24h = pd.DataFrame({assigned_station: zone_monitor}, index=[f"{h}:00" for h in hours])
-st.dataframe(df_24h)
-
-fig, ax = plt.subplots(figsize=(10,5))
-for r in risk_levels:
-    ax.plot(hours, [1 if zone_monitor[h]==r else 0 for h in hours], label=r, marker='o')
-ax.set_xticks(hours)
-ax.set_xlabel("Hour")
-ax.set_ylabel("Risk Flag")
-ax.set_title(f"24-Hour Flood Risk Monitoring for {assigned_station}")
-ax.legend()
-st.pyplot(fig)
-
-# ---------------- WEEKLY REPORT ---------------- #
-st.markdown("---")
-st.markdown("## 📊 Weekly Report for Your Zone")
-days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-weekly_monitor = [random.choice(risk_levels) for _ in days]
-df_week = pd.DataFrame({assigned_station: weekly_monitor}, index=days)
-st.dataframe(df_week)
-
-fig, ax = plt.subplots(figsize=(10,5))
-for r in risk_levels:
-    ax.plot(days, [1 if weekly_monitor[i]==r else 0 for i in range(7)], label=r, marker='o')
-ax.set_xlabel("Day")
-ax.set_ylabel("Risk Flag")
-ax.set_title(f"Weekly Flood Risk Summary for {assigned_station}")
-ax.legend()
-st.pyplot(fig)
-
-st.success("Station-wise monitoring and weekly report displayed successfully.")
+    # ----------------- LOGOUT ----------------- #
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.experimental_rerun()
