@@ -1,4 +1,4 @@
-"""Full SAR Flood Mapping + India Flood Monitoring Dashboard"""
+"""Full SAR Flood Mapping + All-India Flood Monitoring Dashboard with Zones"""
 import streamlit as st
 import rasterio
 import matplotlib.pyplot as plt
@@ -12,17 +12,11 @@ from src.utils import (
     toggle_menu_button,
 )
 
-# ---------------- PAGE CONFIGURATION ---------------- #
+# ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(layout="wide", page_title=params["browser_title"])
-
-# Hide menu button if deployed
 toggle_menu_button()
-
-# Create sidebar
 add_logo("MA-logo.png")
 add_about()
-
-# Set page style
 set_home_page_style()
 
 # ---------------- HOME SECTION ---------------- #
@@ -31,12 +25,10 @@ st.markdown("# Home")
 st.markdown("## Introduction")
 st.markdown(
     """
-    This tool allows estimating flood extent using Sentinel-1
-    synthetic-aperture radar (<a href='%s'>SAR</a>) data.<br><br>
-    The methodology is based on a <a href='%s'>recommended practice</a>
-    by the UN-SPIDER and uses several satellite datasets processed on
-    <a href='%s'>Google Earth Engine</a>.
-    """
+This tool estimates flood extent using Sentinel-1 synthetic-aperture radar
+(<a href='%s'>SAR</a>) data processed via <a href='%s'>UN-SPIDER recommended
+practice</a> on <a href='%s'>Google Earth Engine</a>.
+"""
     % (
         params["url_sentinel_esa"],
         params["url_unspider_tutorial"],
@@ -48,133 +40,184 @@ st.markdown(
 st.markdown("## How to use the tool")
 st.markdown(
     """
-    <ul>
-        <li>Select <i>Flood extent analysis</i> in the sidebar.</li>
-        <li>Use the drawing tool to select an area of interest.</li>
-        <li>Choose image dates before and after the flood event.</li>
-        <li>Adjust parameters like threshold and pass direction.</li>
-        <li>Click <i>Compute flood extent</i> to generate the flood map.</li>
-        <li>Export the raster/vector flood layer if needed.</li>
-    </ul>
-    """,
+<ul>
+<li>Select <i>Flood extent analysis</i> in the sidebar.</li>
+<li>Draw an area of interest on the map.</li>
+<li>Choose analysis dates before/after flood period.</li>
+<li>Adjust threshold and pass direction.</li>
+<li>Click <i>Compute flood extent</i> to generate flood mapping.</li>
+<li>Export results if needed.</li>
+</ul>
+""",
     unsafe_allow_html=True,
 )
 
-# ---------------- FLOOD VISUALIZATION SECTION ---------------- #
+# ---------------- SAR VISUALIZATION ---------------- #
 st.markdown("---")
 st.title("🌊 SAR Flood Mapping Visualization")
 
 st.markdown(
     """
-Visualizes SAR flood mapping samples using **Sentinel-1 SAR images**, 
-**Sentinel-2 optical images**, and **flood labels**.
+This section visualizes Sentinel-1 SAR, Sentinel-2 optical, and flood label samples.
 """
 )
 
-# File paths (sample data)
 S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
 S2_PATH = "Sample/S2/Spain_7370579_S2Hand.tif"
 LABEL_PATH = "Sample/Labels/Spain_7370579_LabelHand.tif"
 
-# Function to read raster
 def load_raster(path):
     with rasterio.open(path) as src:
-        img = src.read(1)
-    return img
+        return src.read(1)
 
-# Load images
 try:
     s1 = load_raster(S1_PATH)
     s2 = load_raster(S2_PATH)
     label = load_raster(LABEL_PATH)
 except Exception as e:
-    st.error(f"Error loading files: {e}")
+    st.error(f"Error loading raster samples: {e}")
     st.stop()
 
-# Plot images
-fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+fig, ax = plt.subplots(1, 3, figsize=(18, 5))
 ax[0].imshow(s1, cmap="gray")
-ax[0].set_title("Sentinel-1 SAR Image")
+ax[0].set_title("Sentinel-1 SAR")
 ax[1].imshow(s2, cmap="terrain")
-ax[1].set_title("Sentinel-2 Optical Image")
+ax[1].set_title("Sentinel-2 Optical")
 ax[2].imshow(label, cmap="Blues")
 ax[2].set_title("Flood Label")
 for a in ax:
     a.axis("off")
 st.pyplot(fig)
-st.success("Flood sample loaded successfully.")
+st.success("Flood sample visualization loaded.")
 
-# ---------------- INDIA FLOOD MONITORING DASHBOARD ---------------- #
+# ---------------- INDIA FLOOD MONITORING ZONES ---------------- #
 st.markdown("---")
-st.title("🌏 India Flood Monitoring Dashboard")
+st.title("🌏 India Flood Monitoring Dashboard - Zonal View")
 
 st.markdown(
-"""
-Color-coded states and cities indicate flood risk:
-- 🔵 Blue → Monitoring
-- 🔴 Red → Critical (Immediate Action)
-- 🟢 Green → Safe
-- 🟠 Orange → Active Alert / Requires Attention
+    """
+Flood risk zones in all 8 directions are color-coded:
+🔵 Blue → Monitoring  
+🔴 Red → Critical (Immediate Action)  
+🟢 Green → Safe  
+🟠 Orange → Active Alert / Requires Attention
 """
 )
 
-# Example state/city data
-flood_data = {
-    "West Bengal": {"risk": "Critical", "cities": ["Kolkata", "Siliguri", "Asansol"]},
-    "Odisha": {"risk": "Active Alert", "cities": ["Bhubaneswar", "Cuttack", "Puri"]},
-    "Bihar": {"risk": "Monitoring", "cities": ["Patna", "Gaya", "Muzaffarpur"]},
-    "Kerala": {"risk": "Safe", "cities": ["Thiruvananthapuram", "Kochi", "Kozhikode"]},
-    "Assam": {"risk": "Critical", "cities": ["Guwahati", "Dibrugarh", "Silchar"]},
-    "Tamil Nadu": {"risk": "Active Alert", "cities": ["Chennai", "Coimbatore", "Madurai"]}
-}
+# Define zones for each state/UT
+directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
-# Risk color mapping
+# Example random flood risk assignment per zone (update with real data)
+import random
+risk_levels = ["Monitoring", "Critical", "Safe", "Active Alert"]
 risk_colors = {"Monitoring": "blue", "Critical": "red", "Safe": "green", "Active Alert": "orange"}
 
-# Interactive map
-m = folium.Map(location=[22.0, 80.0], zoom_start=5)
-city_coords_example = {
-    "Kolkata": [22.5726, 88.3639], "Siliguri": [26.7271, 88.3953], "Asansol": [23.6850, 86.9524],
-    "Bhubaneswar": [20.2961, 85.8245], "Cuttack": [20.4625, 85.8828], "Puri": [19.8135, 85.8312],
-    "Patna": [25.5941, 85.1376], "Gaya": [24.7956, 85.0], "Muzaffarpur": [26.1209, 85.3647],
-    "Thiruvananthapuram": [8.5241, 76.9366], "Kochi": [9.9312, 76.2673], "Kozhikode": [11.2588, 75.7804],
-    "Guwahati": [26.1445, 91.7362], "Dibrugarh": [27.4728, 94.9110], "Silchar": [24.8330, 92.7780],
-    "Chennai": [13.0827, 80.2707], "Coimbatore": [11.0168, 76.9558], "Madurai": [9.9252, 78.1198]
+# List of Indian States + UTs
+states_uts = [
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa",
+    "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala",
+    "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland",
+    "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana",
+    "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+    "Andaman & Nicobar", "Chandigarh", "Dadra & Nagar Haveli", "Daman & Diu",
+    "Delhi", "Jammu & Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+]
+
+# Assign zones
+state_zones = {}
+for state in states_uts:
+    state_zones[state] = {dir: random.choice(risk_levels) for dir in directions}
+
+# Build folium map
+india_map = folium.Map(location=[22, 80], zoom_start=5)
+
+# Approximate center coordinates for each state (can refine)
+state_coords = {
+    "Andhra Pradesh": [15.9129, 79.74],
+    "Arunachal Pradesh": [28.2180, 94.7278],
+    "Assam": [26.2006, 92.9376],
+    "Bihar": [25.0961, 85.3131],
+    "Chhattisgarh": [21.2787, 81.8661],
+    "Goa": [15.2993, 74.1240],
+    "Gujarat": [22.2587, 71.1924],
+    "Haryana": [29.0588, 76.0856],
+    "Himachal Pradesh": [31.1048, 77.1734],
+    "Jharkhand": [23.6102, 85.2799],
+    "Karnataka": [15.3173, 75.7139],
+    "Kerala": [10.8505, 76.2711],
+    "Madhya Pradesh": [23.4733, 77.9470],
+    "Maharashtra": [19.7515, 75.7139],
+    "Manipur": [24.6637, 93.9063],
+    "Meghalaya": [25.4670, 91.3662],
+    "Mizoram": [23.1645, 92.9376],
+    "Nagaland": [26.1584, 94.5624],
+    "Odisha": [20.9517, 85.0985],
+    "Punjab": [31.1471, 75.3412],
+    "Rajasthan": [27.0238, 74.2179],
+    "Sikkim": [27.5330, 88.5122],
+    "Tamil Nadu": [11.1271, 78.6569],
+    "Telangana": [18.1124, 79.0193],
+    "Tripura": [23.9408, 91.9882],
+    "Uttar Pradesh": [26.8467, 80.9462],
+    "Uttarakhand": [30.0668, 79.0193],
+    "West Bengal": [22.9868, 87.8550],
+    "Andaman & Nicobar": [11.7401, 92.6586],
+    "Chandigarh": [30.7333, 76.7794],
+    "Dadra & Nagar Haveli": [20.1809, 73.0169],
+    "Daman & Diu": [20.4283, 72.8397],
+    "Delhi": [28.6139, 77.2090],
+    "Jammu & Kashmir": [33.7782, 76.5762],
+    "Ladakh": [34.1526, 77.5770],
+    "Lakshadweep": [10.5667, 72.6417],
+    "Puducherry": [11.9416, 79.8083]
 }
 
-for state, info in flood_data.items():
-    color = risk_colors[info["risk"]]
-    for city in info["cities"]:
-        coords = city_coords_example.get(city, [22.0, 80.0])
+# Plot each zone per state as colored marker (simplified)
+for state, zones in state_zones.items():
+    lat, lon = state_coords.get(state, [22, 80])
+    # For each direction, create a small circle offset to represent the zone
+    offset_map = {
+        "N": (0.3, 0), "NE": (0.2, 0.2), "E": (0, 0.3), "SE": (-0.2, 0.2),
+        "S": (-0.3, 0), "SW": (-0.2, -0.2), "W": (0, -0.3), "NW": (0.2, -0.2)
+    }
+    for dir, risk in zones.items():
+        off_lat, off_lon = offset_map[dir]
         folium.CircleMarker(
-            location=coords,
-            radius=8,
-            color=color,
+            location=[lat + off_lat, lon + off_lon],
+            radius=5,
+            color=risk_colors[risk],
             fill=True,
-            fill_color=color,
-            popup=f"{city}, {state} ({info['risk']})"
-        ).add_to(m)
+            fill_color=risk_colors[risk],
+            popup=f"{state} - {dir} zone ({risk})"
+        ).add_to(india_map)
 
-st_folium(m, width=700, height=500)
+# Display map
+try:
+    st_folium(india_map, width=800, height=500, key="india_flood_zones")
+except Exception as e:
+    st.error(f"Map rendering error: {e}")
 
-# ---------------- CITY COUNT SUMMARY ---------------- #
+# ---------------- SUMMARY ---------------- #
 st.markdown("---")
-st.subheader("City Count by Risk Level")
-summary = {key: 0 for key in risk_colors.keys()}
-for info in flood_data.values():
-    summary[info["risk"]] += len(info["cities"])
+st.subheader("📊 Flood Zone Count by Risk Level")
+summary = {risk: 0 for risk in risk_levels}
+for zones in state_zones.values():
+    for risk in zones.values():
+        summary[risk] += 1
 for risk, count in summary.items():
-    st.markdown(f"**{risk}**: {count} cities")
+    st.markdown(f"**{risk}**: {count} zones")
 
-# ---------------- DETAILED STATE/CITY LIST ---------------- #
+# ---------------- LIST STATES & ZONES ---------------- #
 st.markdown("---")
-st.subheader("States and Cities with Risk Levels")
-for state, info in flood_data.items():
-    st.markdown(f"**{state}** ({info['risk']}): {', '.join(info['cities'])}")
+st.subheader("🗺️ States & Zone-wise Risk Levels")
+for state, zones in state_zones.items():
+    zone_info = ", ".join([f"{dir}:{risk}" for dir, risk in zones.items()])
+    st.markdown(f"**{state}** → {zone_info}")
 
 # ---------------- EMERGENCY ALERTS ---------------- #
 st.markdown("---")
 st.subheader("🚨 Emergency Alerts")
-for state, info in flood_data.items():
-    if info["risk"] == "Critical":
-        st.error(f"{state} is in CRITICAL flood condition! Immediate action required in cities: {', '.join(info['cities'])}")
+for state, zones in state_zones.items():
+    critical_zones = [dir for dir, risk in zones.items() if risk == "Critical"]
+    if critical_zones:
+        st.error(f"{state} has CRITICAL zones in directions: {', '.join(critical_zones)}. Immediate action required!")
