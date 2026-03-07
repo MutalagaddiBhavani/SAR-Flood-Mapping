@@ -1,9 +1,8 @@
-"""SAR Flood Monitoring App - Karnataka (Home + Login + Dashboard)"""
+"""SAR Flood Monitoring App - Karnataka"""
 import streamlit as st
 import rasterio
 import matplotlib.pyplot as plt
-import folium
-from streamlit_folium import st_folium
+import numpy as np
 
 # ----------------- APP CONFIG ----------------- #
 st.set_page_config(page_title="SAR Flood Monitoring - Karnataka", layout="wide")
@@ -21,9 +20,9 @@ st.title("🏠 Karnataka SAR Flood Monitoring Tool")
 
 st.markdown("""
 ## Introduction
-This tool allows estimating flood extent using **Sentinel-1 SAR data**.
+This tool estimates flood extent using **Sentinel-1 SAR data**.
 
-The methodology is based on a recommended practice by the UN-SPIDER and uses satellite datasets processed on **Google Earth Engine**.
+The methodology is based on a UN-SPIDER recommended practice and uses satellite datasets processed on **Google Earth Engine**.
 """)
 
 st.markdown("""
@@ -31,7 +30,7 @@ st.markdown("""
 1. Signup/Login as a rescuer.
 2. Select a Station to see districts under it.
 3. View SAR flood samples.
-4. Monitor weekly flood chances.
+4. Monitor 24-hour and weekly flood chances.
 """)
 
 st.markdown("---")
@@ -71,31 +70,6 @@ if st.session_state.logged_in:
     st.markdown("---")
     st.header(f"🏡 Welcome {st.session_state.username} - Karnataka Dashboard")
 
-    # ----------------- SAMPLE SAR VISUALIZATION ----------------- #
-    st.subheader("🌊 SAR Flood Mapping Sample")
-    S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
-    S2_PATH = "Sample/S2/Spain_7370579_S2Hand.tif"
-    LABEL_PATH = "Sample/Labels/Spain_7370579_LabelHand.tif"
-
-    def load_raster(path):
-        with rasterio.open(path) as src:
-            return src.read(1)
-
-    try:
-        s1 = load_raster(S1_PATH)
-        s2 = load_raster(S2_PATH)
-        label = load_raster(LABEL_PATH)
-    except Exception as e:
-        st.error(f"Error loading SAR/Label files: {e}")
-        st.stop()
-
-    fig, ax = plt.subplots(1, 3, figsize=(18, 6))
-    ax[0].imshow(s1, cmap="gray"); ax[0].set_title("Sentinel-1 SAR")
-    ax[1].imshow(s2, cmap="terrain"); ax[1].set_title("Sentinel-2 Optical")
-    ax[2].imshow(label, cmap="Blues"); ax[2].set_title("Flood Label")
-    for a in ax: a.axis("off")
-    st.pyplot(fig)
-
     # ----------------- STATIONS & DISTRICTS ----------------- #
     st.subheader("📍 Karnataka Stations")
     stations = {
@@ -109,34 +83,55 @@ if st.session_state.logged_in:
     st.markdown(f"### Districts under **{selected_station}**")
     st.write(", ".join(stations[selected_station]))
 
-    # ----------------- FOLIUM MAP ----------------- #
-    st.subheader("🗺️ Station Map")
-    m = folium.Map(location=[13.0, 76.0], zoom_start=7)
-    station_coords = {
-        "Station North": [15.5, 75.0],
-        "Station East": [14.0, 77.0],
-        "Station South": [12.5, 76.5],
-        "Station West": [14.5, 74.5]
-    }
-    for name, coords in station_coords.items():
-        folium.Marker(
-            location=coords,
-            popup=f"{name} | Districts: {', '.join(stations[name])}",
-            icon=folium.Icon(color="blue")
-        ).add_to(m)
+    # ----------------- SAMPLE SAR VISUALIZATION ----------------- #
+    st.subheader("🌊 SAR Flood Mapping Sample")
+    S1_PATH = "Sample/S1/Spain_7370579_S1Hand.tif"
+    S2_PATH = "Sample/S2/Spain_7370579_S2Hand.tif"
+    LABEL_PATH = "Sample/Labels/Spain_7370579_LabelHand.tif"
 
-    st_folium(m, width=700, height=500)
+    def load_raster(path):
+        try:
+            with rasterio.open(path) as src:
+                return src.read(1)
+        except:
+            return None
+
+    s1 = load_raster(S1_PATH)
+    s2 = load_raster(S2_PATH)
+    label = load_raster(LABEL_PATH)
+
+    if s1 is not None and s2 is not None and label is not None:
+        fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+        ax[0].imshow(s1, cmap="gray"); ax[0].set_title("Sentinel-1 SAR")
+        ax[1].imshow(s2, cmap="terrain"); ax[1].set_title("Sentinel-2 Optical")
+        ax[2].imshow(label, cmap="Blues"); ax[2].set_title("Flood Label")
+        for a in ax: a.axis("off")
+        st.pyplot(fig)
+    else:
+        st.warning("SAR sample files not found. Skipping visualization.")
 
     # ----------------- WEEKLY FLOOD REPORT ----------------- #
     st.subheader("📊 Weekly Flood Chance Report")
     days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-    flood_chances = [20, 35, 50, 40, 30, 25, 45]  # Example %
+    weekly_chance = np.random.randint(20, 80, size=7)  # Simulated data
     fig2, ax2 = plt.subplots()
-    ax2.plot(days, flood_chances, marker="o", color="blue")
-    ax2.set_ylim(0,100)
+    ax2.plot(days, weekly_chance, marker="o", color="blue")
+    ax2.set_ylim(0, 100)
     ax2.set_ylabel("Flood Chance (%)")
     ax2.set_title("Karnataka Weekly Flood Monitoring")
     st.pyplot(fig2)
+
+    # ----------------- 24-HOUR MONITORING ----------------- #
+    st.subheader("⏱️ 24-Hour Flood Monitoring")
+    hours = [f"{h}:00" for h in range(24)]
+    hourly_chance = np.random.randint(10, 70, size=24)
+    fig3, ax3 = plt.subplots(figsize=(12,4))
+    ax3.plot(hours, hourly_chance, marker="o", color="orange")
+    ax3.set_ylim(0, 100)
+    ax3.set_ylabel("Flood Chance (%)")
+    ax3.set_title("24-Hour Flood Monitoring")
+    plt.xticks(rotation=45)
+    st.pyplot(fig3)
 
     # ----------------- LOGOUT ----------------- #
     if st.button("Logout"):
