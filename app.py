@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import requests
 from twilio.rest import Client
+from PIL import Image
 
 # -------- Page Config -------- #
 st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
@@ -35,8 +36,8 @@ status_colors = {
     "Critical": "red"
 }
 
-# -------- OpenWeatherMap API key -------- #
-API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"  # put your API key here
+# -------- OpenWeatherMap API -------- #
+API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"
 
 def get_weather(city):
     try:
@@ -53,10 +54,10 @@ def get_weather(city):
     except Exception:
         return None, None, None
 
-# -------- Twilio SMS Example -------- #
+# -------- Twilio SMS -------- #
 TWILIO_SID = "YOUR_TWILIO_SID"
 TWILIO_AUTH = "YOUR_TWILIO_AUTH_TOKEN"
-TWILIO_FROM = "+1234567890"  # Twilio number
+TWILIO_FROM = "+1234567890"
 
 def send_sms(message, to_number):
     client = Client(TWILIO_SID, TWILIO_AUTH)
@@ -121,7 +122,7 @@ def monitoring_page():
     river_level = np.random.uniform(2.0, 8.0)
     st.markdown(f"🌊 River Water Level: {river_level:.2f} m")
 
-    # Simulated 24-hour flood risk
+    # 24-hour flood risk
     district_zone_risk = {dist: {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones} for dist in districts}
     monitoring_data = []
     for dist, zones_dict in district_zone_risk.items():
@@ -132,13 +133,21 @@ def monitoring_page():
     df_filtered = df_monitoring[df_monitoring["District"] == district_selected]
     st.dataframe(df_filtered.style.applymap(lambda x: f'color: {status_colors.get(x,"black")}', subset=["Risk Level"]), height=400)
 
-    # Dummy AI Flood Detection Map
-    st.markdown("### 🛰️ AI Flood Detection Map (Dummy Example)")
-    flood_map = np.random.randint(0,2,(100,100))
-    plt.imshow(flood_map, cmap="Blues")
-    plt.title(f"{district_selected} Flood Map")
+    # SAR image placeholder (replace with real dataset)
+    st.markdown("### 🛰️ Latest SAR Image")
+    try:
+        sar_image = Image.open(f"SAR_Images/{district_selected}.png")  # folder me images rakhni
+        st.image(sar_image, use_column_width=True)
+    except:
+        st.warning("SAR Image not available for this district yet.")
+
+    # Flood Heatmap
+    st.markdown("### 🌊 Flood Heatmap")
+    heatmap = np.random.randint(0,100,(10,10))  # dummy example
+    plt.imshow(heatmap, cmap="Reds")
+    plt.title(f"{district_selected} Flood Heatmap")
     st.pyplot(plt.gcf())
-    
+
     if st.button("Go to Weekly Report"):
         st.session_state.page = "weekly_report"
         st.experimental_rerun()
