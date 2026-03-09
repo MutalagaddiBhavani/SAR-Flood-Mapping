@@ -58,7 +58,7 @@ def logout():
 
 # ---------------- Sidebar ---------------- #
 st.sidebar.image("MA-logo.png", use_column_width=True)
-st.sidebar.markdown("## SAR-Flood-Mapping (Real-Time)")
+st.sidebar.markdown("## SAR-Flood-Mapping")
 st.sidebar.markdown("""
 Detects and maps flood-affected areas using SAR data.
 Supports disaster response, environmental monitoring, and geospatial analysis.
@@ -200,3 +200,4 @@ elif st.session_state.page == "dashboard":
     dashboard_page()
 elif st.session_state.page == "mapping":
     mapping_page()
+
