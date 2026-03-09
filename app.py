@@ -5,22 +5,25 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
-
-# Machine Learning
 from sklearn.ensemble import RandomForestClassifier
 
-# ---------------- Page Config ---------------- #
-st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
+# ---------------- PAGE CONFIG ---------------- #
+st.set_page_config(
+    page_title="SAR Flood Monitoring Dashboard",
+    layout="wide"
+)
 
-# ---------------- Session State ---------------- #
+# ---------------- SESSION STATE ---------------- #
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
 if "users" not in st.session_state:
     st.session_state.users = {}
+
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
-# ---------------- District Coordinates ---------------- #
+# ---------------- DISTRICT COORDINATES ---------------- #
 district_coords = {
     "Bagalkot": (16.1667, 75.7000),
     "Ballari": (15.1394, 76.9214),
@@ -54,27 +57,9 @@ district_coords = {
     "Yadgir": (16.7742, 77.1322)
 }
 
-# ---------------- Temperature Data ---------------- #
-current_temps = {
-    "Bagalkot": 37,"Ballari": 36,"Belagavi": 34,"Bengaluru Rural": 33,
-    "Bengaluru Urban": 33,"Bidar": 35,"Chamarajanagar": 32,"Chikkaballapura": 33,
-    "Chikkamagaluru": 30,"Chitradurga": 35,"Dakshina Kannada": 31,"Davanagere": 36,
-    "Dharwad": 35,"Gadag": 35,"Hassan": 31,"Haveri": 35,"Kalaburagi": 36,
-    "Kodagu": 29,"Kolar": 33,"Koppal": 36,"Mandya": 33,"Mysuru": 32,
-    "Raichur": 37,"Ramanagara": 33,"Shivamogga": 33,"Tumakuru": 34,
-    "Udupi": 31,"Uttara Kannada": 31,"Vijayapura": 36,"Yadgir": 36
-}
-
-# ---------------- Rainfall Data ---------------- #
-current_rainfall = {
-    "Bagalkot":2,"Ballari":0,"Belagavi":10,"Bengaluru Rural":5,
-    "Bengaluru Urban":6,"Bidar":1,"Chamarajanagar":7,"Chikkaballapura":4,
-    "Chikkamagaluru":12,"Chitradurga":3,"Dakshina Kannada":15,"Davanagere":2,
-    "Dharwad":1,"Gadag":1,"Hassan":8,"Haveri":1,"Kalaburagi":0,
-    "Kodagu":18,"Kolar":5,"Koppal":0,"Mandya":7,"Mysuru":6,
-    "Raichur":0,"Ramanagara":5,"Shivamogga":12,"Tumakuru":4,
-    "Udupi":15,"Uttara Kannada":14,"Vijayapura":0,"Yadgir":0
-}
+# ---------------- WEATHER DATA ---------------- #
+current_temps = {district: np.random.randint(29,38) for district in district_coords}
+current_rainfall = {district: np.random.randint(0,20) for district in district_coords}
 
 status_colors = {
     "Safe":"green",
@@ -83,13 +68,11 @@ status_colors = {
     "Critical":"red"
 }
 
-# ---------------- Dummy River Level ---------------- #
-def get_dummy_river_level():
-    return round(np.random.uniform(1,15),2)
-
-# ---------------- Generate ML Training Data ---------------- #
+# ---------------- ML TRAINING DATA ---------------- #
 def generate_training_data():
+
     data = []
+
     for _ in range(500):
 
         rainfall = np.random.uniform(0,200)
@@ -108,76 +91,104 @@ def generate_training_data():
         data.append([rainfall,river,temp,risk])
 
     df = pd.DataFrame(data,columns=["rainfall","river","temp","risk"])
+
     return df
 
-# Train ML Model
 df = generate_training_data()
+
 X = df[["rainfall","river","temp"]]
 y = df["risk"]
 
-model = RandomForestClassifier(n_estimators=100)
+model = RandomForestClassifier()
 model.fit(X,y)
 
-# ---------------- Sidebar ---------------- #
+# ---------------- RIVER LEVEL ---------------- #
+def get_river_level():
+    return round(np.random.uniform(1,15),2)
+
+# ---------------- SIDEBAR ---------------- #
 def sidebar_info():
+
+    st.sidebar.image("images/logo.png", use_container_width=True)
+
     st.sidebar.markdown("## SAR Flood Mapping")
+
     st.sidebar.markdown(
-        "Flood monitoring system using Machine Learning and geospatial visualization."
+        """
+SAR-Flood-Mapping detects flood-affected regions using Synthetic Aperture Radar (SAR)
+satellite imagery and machine learning.
+
+It helps disaster management authorities monitor flood risk even during
+cloud cover or night conditions.
+"""
     )
 
-# ---------------- Login Page ---------------- #
+# ---------------- LOGIN PAGE ---------------- #
 def login_page():
+
     sidebar_info()
 
-    st.title("SAR Flood Monitoring Dashboard")
+    st.title("SAR Flood Monitoring Dashboard - Login/Register")
 
     username = st.text_input("Username")
-    password = st.text_input("Password",type="password")
+    password = st.text_input("Password", type="password")
 
     col1,col2 = st.columns(2)
 
     with col1:
+
         if st.button("Login"):
-            if username in st.session_state.users and st.session_state.users[username]==password:
-                st.session_state.logged_in=True
-                st.session_state.page="monitoring"
+
+            if username in st.session_state.users and st.session_state.users[username] == password:
+
+                st.session_state.logged_in = True
+                st.session_state.page = "monitoring"
+
             else:
+
                 st.error("User not registered")
 
     with col2:
+
         if st.button("Register"):
+
             if username and password:
-                st.session_state.users[username]=password
-                st.success("Registered successfully")
 
-# ---------------- Logout ---------------- #
+                st.session_state.users[username] = password
+                st.success("User Registered")
+
+# ---------------- LOGOUT ---------------- #
 def logout():
-    st.session_state.logged_in=False
-    st.session_state.page="login"
 
-# ---------------- Monitoring Dashboard ---------------- #
+    st.session_state.logged_in = False
+    st.session_state.page = "login"
+
+# ---------------- MONITORING PAGE ---------------- #
 def monitoring_page():
 
     sidebar_info()
 
-    st.title("24-Hour Flood Monitoring Dashboard")
+    st.title("24-Hour Flood Monitoring")
 
-    st.button("Logout",on_click=logout)
+    st.button("Logout", on_click=logout)
 
-    district = st.selectbox("Select District",list(district_coords.keys()))
+    district = st.selectbox("Select District", list(district_coords.keys()))
 
     lat,lon = district_coords[district]
 
-    temp = current_temps.get(district,33)
-    rainfall = current_rainfall.get(district,5)
-    river = get_dummy_river_level()
+    temp = current_temps[district]
+    rainfall = current_rainfall[district]
+    river = get_river_level()
 
-    st.metric("Temperature °C",temp)
-    st.metric("Rainfall mm",rainfall)
-    st.metric("River Level m",river)
+    col1,col2,col3 = st.columns(3)
 
-    # ---------------- ML Prediction ---------------- #
+    col1.metric("Temperature °C", temp)
+    col2.metric("Rainfall mm", rainfall)
+    col3.metric("River Level m", river)
+
+    # ML Prediction
     prediction = model.predict([[rainfall,river,temp]])
+
     risk = prediction[0]
 
     st.markdown(
@@ -185,18 +196,10 @@ def monitoring_page():
         unsafe_allow_html=True
     )
 
-    # Probability display
-    prob = model.predict_proba([[rainfall,river,temp]])
-
-    st.write("### Prediction Probability")
-
-    for i,label in enumerate(model.classes_):
-        st.write(f"{label}: {round(prob[0][i]*100,2)} %")
-
-    # ---------------- Map ---------------- #
+    # Map
     st.markdown("### District Location")
 
-    m = folium.Map(location=[lat,lon],zoom_start=9)
+    m = folium.Map(location=[lat,lon], zoom_start=9)
 
     folium.Marker(
         [lat,lon],
@@ -208,50 +211,54 @@ def monitoring_page():
     st_folium(m,width=700,height=400)
 
     if st.button("Weekly Report"):
-        st.session_state.page="weekly_report"
 
-# ---------------- Weekly Report ---------------- #
+        st.session_state.page = "weekly_report"
+
+# ---------------- WEEKLY REPORT ---------------- #
 def weekly_report():
 
     sidebar_info()
 
     st.title("Weekly Flood Trend")
 
-    st.button("Back",on_click=lambda: st.session_state.update({"page":"monitoring"}))
+    st.button("Back", on_click=lambda: st.session_state.update({"page":"monitoring"}))
 
-    district = st.selectbox("Select District",list(district_coords.keys()))
+    district = st.selectbox("District", list(district_coords.keys()))
 
-    base_rain = current_rainfall.get(district,5)
+    base_rain = current_rainfall[district]
 
-    dates = [datetime.now()-timedelta(days=i) for i in range(6,-1,-1)]
+    dates = [datetime.now() - timedelta(days=i) for i in range(6,-1,-1)]
 
-    flood_risk = [min(100,max(0,base_rain*0.6 + np.random.uniform(0,15))) for _ in range(7)]
+    flood_risk = [min(100,max(0, base_rain*0.6 + np.random.uniform(0,15))) for _ in range(7)]
 
     df = pd.DataFrame({
         "Date":dates,
-        "Flood Risk (%)":flood_risk
+        "Flood Risk":flood_risk
     })
 
     df["Date"] = df["Date"].dt.strftime("%d-%b")
 
-    fig,ax = plt.subplots(figsize=(10,4))
+    fig,ax = plt.subplots()
 
-    ax.plot(df["Date"],df["Flood Risk (%)"],marker="o")
+    ax.plot(df["Date"],df["Flood Risk"],marker="o")
 
     ax.set_ylim(0,100)
-    ax.set_ylabel("Flood Risk %")
+
     ax.set_title(f"Weekly Flood Trend - {district}")
 
     plt.grid(True)
 
     st.pyplot(fig)
 
-# ---------------- Main ---------------- #
+# ---------------- MAIN ---------------- #
 if not st.session_state.logged_in:
+
     login_page()
 
-elif st.session_state.page=="monitoring":
+elif st.session_state.page == "monitoring":
+
     monitoring_page()
 
-elif st.session_state.page=="weekly_report":
+elif st.session_state.page == "weekly_report":
+
     weekly_report()
