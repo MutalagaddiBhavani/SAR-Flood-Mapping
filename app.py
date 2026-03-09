@@ -1,18 +1,14 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 import requests
-import folium
-import json
-from streamlit_folium import st_folium
-import os
 
-# ---------------- Page Config ---------------- #
-st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
+# -------- Page Config -------- #
+st.set_page_config(layout="wide", page_title="SAR Flood Monitoring")
 
-# ---------------- Session State ---------------- #
+# -------- Session State -------- #
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "users" not in st.session_state:
@@ -20,119 +16,102 @@ if "users" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
-# ---------------- Karnataka Districts ---------------- #
-district_coords = {
-    "Bengaluru Urban": (12.9716, 77.5946),
-    "Bengaluru Rural": (13.1976, 77.7066),
-    "Mysuru": (12.2958, 76.6394),
-    "Mangalore": (12.9141, 74.8560),
-    "Hubli-Dharwad": (15.3647, 75.1232),
-    "Belagavi": (15.8497, 74.4977),
-    "Ballari": (15.1394, 76.9214),
-    "Chikkamagaluru": (13.3151, 75.7750),
-    "Davanagere": (14.4647, 75.9210),
-    "Tumakuru": (13.3409, 77.1010),
-    "Shimoga": (13.9299, 75.5681),
-    "Raichur": (16.2076, 77.3463),
-    "Kalaburagi": (17.3297, 76.8343),
-    "Bidar": (17.9133, 77.5280),
-    "Udupi": (13.3409, 74.7421),
-    "Hassan": (13.0072, 76.1025),
-    "Mandya": (12.5240, 76.8970),
-    "Kodagu": (12.3375, 75.8069),
-    "Chitradurga": (14.2319, 76.4026),
-    "Kolar": (13.1366, 78.1296),
-    "Chamarajanagar": (11.9184, 77.0200),
-    "Ramanagara": (12.7237, 77.2810),
-    "Haveri": (14.8000, 75.4000),
-    "Gadag": (15.4319, 75.6350),
-    "Yadgir": (16.7695, 77.1375),
-    "Bagalkot": (16.1660, 75.6769),
-    "Vijayapura": (16.8300, 75.7100),
-    "Bagepalli": (13.3039, 78.0803),
-    "Koppal": (15.3453, 76.1548),
-    "Chikkaballapur": (13.4360, 77.7276)
-}
-
+# -------- Constants -------- #
+districts = [
+    "Bengaluru Urban", "Bengaluru Rural", "Mysuru", "Mangalore", "Hubli-Dharwad",
+    "Belagavi", "Ballari", "Chikkamagaluru", "Davanagere", "Tumakuru",
+    "Shimoga", "Raichur", "Kalaburagi", "Bidar", "Udupi", "Hassan",
+    "Mandya", "Kodagu", "Chitradurga", "Kolar", "Chamarajanagar",
+    "Ramanagara", "Haveri", "Gadag", "Yadgir", "Bagalkot", "Vijayapura",
+    "Bagepalli", "Koppal", "Chikkaballapur"
+]
 zones = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 risk_levels = ["Safe", "Monitoring", "Active Alert", "Critical"]
-status_colors = {"Safe": "green", "Monitoring": "blue", "Active Alert": "orange", "Critical": "red"}
+status_colors = {
+    "Safe": "green",
+    "Monitoring": "blue",
+    "Active Alert": "orange",
+    "Critical": "red"
+}
 
-# ---------------- Login/Register Page ---------------- #
+# -------- OpenWeatherMap API key -------- #
+API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"  # <-- Yahan apni API key dalen
+
+def get_weather(city):
+    try:
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city},IN&units=metric&appid={API_KEY}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            temp = data['main']['temp']
+            desc = data['weather'][0]['description'].title()
+            return temp, desc
+        else:
+            return None, None
+    except Exception:
+        return None, None
+
+# -------- Login/Register Page -------- #
 def login_page():
+    st.sidebar.image("MA-logo.png", use_column_width=True)  # Sidebar logo
     st.title("Login / Register")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
-
-    if len(st.session_state.users) == 0:
-        st.info("No users registered yet. Please register first! 📝")
-
     col1, col2 = st.columns(2)
+
     with col1:
         if st.button("Login"):
-            if username in st.session_state.users and st.session_state.users[username] == password:
-                st.session_state.logged_in = True
-                st.session_state.page = "dashboard"
-                st.success(f"Welcome {username}!")
-                st.experimental_rerun()
+            if username in st.session_state.users:
+                if st.session_state.users[username] == password:
+                    st.session_state.logged_in = True
+                    st.session_state.page = "monitoring"
+                    st.success(f"Welcome {username}!")
+                    st.experimental_rerun()
+                else:
+                    st.error("Incorrect password! ❌")
             else:
-                st.error("Invalid username or password! ❌")
+                st.warning("User not registered! Please register first.")
+
     with col2:
         if st.button("Register"):
             if username and password:
-                st.session_state.users[username] = password
-                st.success("User registered! Please login now. ✅")
+                if username not in st.session_state.users:
+                    st.session_state.users[username] = password
+                    st.success("User registered successfully! ✅ Please login.")
+                else:
+                    st.info("User already exists. Please login.")
             else:
-                st.error("Enter both username and password! ⚠️")
+                st.error("Enter both username and password!")
 
-# ---------------- Logout ---------------- #
+# -------- Logout -------- #
 def logout():
     st.session_state.logged_in = False
     st.session_state.page = "login"
     st.experimental_rerun()
 
-# ---------------- Get Real-time Weather ---------------- #
-def get_weather(lat, lon):
-    try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=precipitation,temperature_2m,windspeed_10m&timezone=Asia/Kolkata"
-        r = requests.get(url, timeout=5)
-        data = r.json()
-        precipitation_list = data['hourly']['precipitation']
-        temperature_list = data['hourly']['temperature_2m']
-        windspeed_list = data['hourly']['windspeed_10m']
-        time_list = data['hourly']['time']
-
-        from datetime import datetime
-        now = datetime.now().strftime("%Y-%m-%dT%H:00")
-        if now in time_list:
-            idx = time_list.index(now)
-        else:
-            idx = 0
-
-        rainfall = precipitation_list[idx]
-        temp = temperature_list[idx]
-        wind = windspeed_list[idx]
-
-    except Exception:
-        rainfall = 0
-        temp = 0
-        wind = 0
-
-    return rainfall, wind, temp
-
-# ---------------- Dashboard Page ---------------- #
-def dashboard_page():
-    st.title("SAR Flood Monitoring Dashboard 🌊")
+# -------- District-wise 24-Hour Flood Monitoring Page -------- #
+def monitoring_page():
+    st.sidebar.image("MA-logo.png", use_column_width=True)  # Sidebar logo
+    st.title("24-Hour Flood Monitoring (District-wise)")
     st.button("Logout", on_click=logout)
 
-    st.subheader("Select District")
-    district = st.selectbox("District", list(district_coords.keys()))
+    district_selected = st.selectbox("Select District", districts)
 
-    # 24-hour district risk monitoring (simulated)
-    st.markdown("### 24-Hour Flood Monitoring (District-wise)")
+    # Fetch weather for the selected district (city name approximate)
+    # Note: Some district names might differ from city names recognized by OpenWeatherMap
+    city_for_weather = district_selected.split()[0]  # Take first word for simplicity
+    temp, desc = get_weather(city_for_weather)
+
+    if temp is not None:
+        st.markdown(f"### Current Temperature in {district_selected}: {temp} °C")
+        st.markdown(f"**Weather:** {desc}")
+    else:
+        st.markdown(f"Weather data not available for {district_selected}.")
+
+    # Simulated district + zone risk levels
     district_zone_risk = {}
-    for dist in district_coords.keys():
-        district_zone_risk[dist] = {zone: np.random.choice(risk_levels, p=[0.3, 0.3, 0.3, 0.1]) for zone in zones}
+    for dist in districts:
+        district_zone_risk[dist] = {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones}
 
     monitoring_data = []
     for dist, zones_dict in district_zone_risk.items():
@@ -140,75 +119,46 @@ def dashboard_page():
             monitoring_data.append([dist, zone, risk])
 
     df_monitoring = pd.DataFrame(monitoring_data, columns=["District", "Zone", "Risk Level"])
-    st.dataframe(df_monitoring.style.applymap(lambda x: f'color: {status_colors[x]}' if x in status_colors else ''))
+    df_filtered = df_monitoring[df_monitoring["District"] == district_selected]
 
-    st.subheader("Weekly Flood Report")
+    def color_risk(val):
+        return f'color: {status_colors.get(val, "black")}'
+    st.dataframe(df_filtered.style.applymap(color_risk, subset=["Risk Level"]), height=400)
+
+    if st.button("Go to Weekly Report"):
+        st.session_state.page = "weekly_report"
+        st.experimental_rerun()
+
+# -------- Weekly Report Page -------- #
+def weekly_report_page():
+    st.sidebar.image("MA-logo.png", use_column_width=True)  # Sidebar logo
+    st.title("Weekly Flood Risk Report")
+    st.button("Back to Monitoring", on_click=lambda: change_page("monitoring"))
+    st.button("Logout", on_click=logout)
+
     dates = [datetime.now() - timedelta(days=i) for i in range(6, -1, -1)]
     weekly_data = [np.random.randint(0, 100) for _ in range(7)]
+
     df_weekly = pd.DataFrame({"Date": dates, "Flood Risk (%)": weekly_data})
     df_weekly["Date"] = df_weekly["Date"].dt.strftime("%d-%b")
 
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(df_weekly["Date"], df_weekly["Flood Risk (%)"], marker="o", linestyle="-", color="royalblue")
-    ax.set_title(f"Weekly Flood Risk Trend - District: {district}")
+    ax.set_title("Weekly Flood Risk Trend")
     ax.set_ylabel("Flood Risk (%)")
     ax.set_ylim(0, 100)
     plt.xticks(rotation=45)
     plt.grid(True)
     st.pyplot(fig)
 
-    if st.button("Go to Flood Mapping Page"):
-        st.session_state.page = "mapping"
-        st.experimental_rerun()
+def change_page(page_name):
+    st.session_state.page = page_name
+    st.experimental_rerun()
 
-# ---------------- Flood Mapping Page ---------------- #
-def mapping_page():
-    st.title("Flood Mapping & SAR Images 🛰️")
-    st.button("Back to Dashboard", on_click=lambda: st.session_state.update({"page": "dashboard"}))
-
-    st.subheader("Select District")
-    district = st.selectbox("District", list(district_coords.keys()))
-    lat, lon = district_coords[district]
-
-    rainfall, wind, temp = get_weather(lat, lon)
-    st.metric("Rainfall (mm)", rainfall)
-    st.metric("Wind Speed (km/h)", wind)
-    st.metric("Temperature (°C)", temp)
-
-    # SAR Image display
-    st.subheader("Latest SAR Image")
-    sar_filename = f"{district.replace(' ', '_')}_SAR.png"
-
-    # Try local folder first
-    local_path = os.path.join("S1", sar_filename)
-    if os.path.exists(local_path):
-        st.image(local_path, caption=f"{district} SAR Image", use_column_width=True)
-    else:
-        # Try remote GitHub URL (replace username/repo/path with actual)
-        sar_url = f"https://raw.githubusercontent.com/your_github_username/your_repo_name/main/S1/{sar_filename}"
-        try:
-            st.image(sar_url, caption=f"{district} SAR Image", use_column_width=True)
-        except:
-            st.info("SAR Image not available for this district yet.")
-
-    # Map visualization
-    st.subheader("District Map")
-    m = folium.Map(location=[lat, lon], zoom_start=7)
-    folium.Marker([lat, lon], tooltip=district, popup=f"{district} Rainfall: {rainfall}mm").add_to(m)
-
-    # Load geojson if available
-    geojson_file = "Sen1Floods11_Metadata.geojson"
-    if os.path.exists(geojson_file):
-        with open(geojson_file) as f:
-            geojson_data = json.load(f)
-        folium.GeoJson(geojson_data, name="Districts").add_to(m)
-
-    st_folium(m, width=700, height=500)
-
-# ---------------- Main App Flow ---------------- #
+# -------- Main -------- #
 if not st.session_state.logged_in:
     login_page()
-elif st.session_state.page == "dashboard":
-    dashboard_page()
-elif st.session_state.page == "mapping":
-    mapping_page()
+elif st.session_state.page == "monitoring":
+    monitoring_page()
+elif st.session_state.page == "weekly_report":
+    weekly_report_page()
