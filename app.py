@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
-import os
 
 # ---------------- Page Config ---------------- #
 st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
@@ -28,7 +27,6 @@ district_coords = {
     # add other districts similarly
 }
 
-zones = ["N","NE","E","SE","S","SW","W","NW"]
 risk_levels = ["Safe","Monitoring","Active Alert","Critical"]
 status_colors = {"Safe":"green","Monitoring":"blue","Active Alert":"orange","Critical":"red"}
 
@@ -45,6 +43,9 @@ def get_dummy_river_level(lat, lon):
 # ---------------- Login Page ---------------- #
 def login_page():
     st.sidebar.image("MA-logo.png", use_column_width=True)
+    st.sidebar.markdown("## SAR Flood Mapping")
+    st.sidebar.markdown("Synthetic Aperture Radar (SAR) data based flood monitoring dashboard for Karnataka districts. Supports flood risk prediction and visualization.")
+    
     st.title("SAR Flood Monitoring Dashboard - Login/Register")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -74,6 +75,9 @@ def logout():
 # ---------------- Monitoring Page ---------------- #
 def monitoring_page():
     st.sidebar.image("MA-logo.png", use_column_width=True)
+    st.sidebar.markdown("## SAR Flood Mapping")
+    st.sidebar.markdown("Synthetic Aperture Radar (SAR) data based flood monitoring dashboard for Karnataka districts. Supports flood risk prediction and visualization.")
+    
     st.title("24-Hour Flood Monitoring (District-wise)")
     st.button("Logout", on_click=logout)
     
@@ -93,19 +97,11 @@ def monitoring_page():
     risk = "Critical" if risk_score>50 else "Active Alert" if risk_score>30 else "Monitoring" if risk_score>10 else "Safe"
     st.markdown(f"**Flood Risk Status:** <span style='color:{status_colors[risk]}'>{risk}</span>", unsafe_allow_html=True)
     
-    # SAR Image display (dummy)
-    sar_img_path = f"SAR_Images/{district.replace(' ','_')}.png"
-    if os.path.exists(sar_img_path):
-        st.image(sar_img_path, caption=f"{district} SAR Image", use_column_width=True)
-    else:
-        st.warning("SAR Image not available for this district yet.")
-    
-    # Flood heatmap (dummy)
-    st.markdown("### Flood Heatmap")
-    heat = np.random.randint(0,100,(10,10))
-    plt.imshow(heat, cmap="hot")
-    plt.colorbar(label="Flood Probability")
-    st.pyplot(plt.gcf())
+    # Map display
+    st.markdown("### District Location")
+    m = folium.Map(location=[lat, lon], zoom_start=10)
+    folium.Marker([lat, lon], popup=f"{district} - {risk}", tooltip=district).add_to(m)
+    st_data = st_folium(m, width=700, height=400)
     
     if st.button("Weekly Report"):
         st.session_state.page = "weekly_report"
@@ -113,6 +109,9 @@ def monitoring_page():
 # ---------------- Weekly Report ---------------- #
 def weekly_report():
     st.sidebar.image("MA-logo.png", use_column_width=True)
+    st.sidebar.markdown("## SAR Flood Mapping")
+    st.sidebar.markdown("Synthetic Aperture Radar (SAR) data based flood monitoring dashboard for Karnataka districts. Supports flood risk prediction and visualization.")
+    
     st.title("Weekly Flood Report")
     st.button("Back", on_click=lambda: st.session_state.update({"page":"monitoring"}))
     
