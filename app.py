@@ -1,186 +1,196 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from sklearn.ensemble import RandomForestClassifier
 import requests
-from twilio.rest import Client
-from PIL import Image
+import geemap
+import ee
 
-# -------- Page Config -------- #
-st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
+# ---------------- CONFIG ---------------- #
+st.set_page_config(layout="wide", page_title="Real-Time SAR Flood Monitoring")
 
-# -------- Session State -------- #
+# ---------------- GOOGLE EARTH ENGINE ---------------- #
+try:
+    ee.Initialize()
+except:
+    ee.Authenticate()
+    ee.Initialize()
+
+# ---------------- SIDEBAR ---------------- #
+st.sidebar.title("SAR Flood Monitoring (Real-Time)")
+
+# ---------------- LOGIN SYSTEM ---------------- #
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
 if "users" not in st.session_state:
     st.session_state.users = {}
-if "page" not in st.session_state:
-    st.session_state.page = "login"
 
-# -------- Constants -------- #
-districts = [
-    "Bengaluru Urban", "Bengaluru Rural", "Mysuru", "Mangalore", "Hubli-Dharwad",
-    "Belagavi", "Ballari", "Chikkamagaluru", "Davanagere", "Tumakuru",
-    "Shimoga", "Raichur", "Kalaburagi", "Bidar", "Udupi", "Hassan",
-    "Mandya", "Kodagu", "Chitradurga", "Kolar", "Chamarajanagar",
-    "Ramanagara", "Haveri", "Gadag", "Yadgir", "Bagalkot", "Vijayapura",
-    "Bagepalli", "Koppal", "Chikkaballapur"
-]
-zones = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-risk_levels = ["Safe", "Monitoring", "Active Alert", "Critical"]
-status_colors = {
-    "Safe": "green",
-    "Monitoring": "blue",
-    "Active Alert": "orange",
-    "Critical": "red"
-}
+if not st.session_state.logged_in:
 
-# -------- OpenWeatherMap API -------- #
-API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"
+    st.title("Login / Register")
 
-def get_weather(city):
-    try:
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city},IN&units=metric&appid={API_KEY}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            temp = data['main']['temp']
-            desc = data['weather'][0]['description'].title()
-            rain_1h = data.get("rain", {}).get("1h", 0)
-            return temp, desc, rain_1h
-        else:
-            return None, None, None
-    except Exception:
-        return None, None, None
-
-# -------- Twilio SMS -------- #
-TWILIO_SID = "YOUR_TWILIO_SID"
-TWILIO_AUTH = "YOUR_TWILIO_AUTH_TOKEN"
-TWILIO_FROM = "+1234567890"
-
-def send_sms(message, to_number):
-    client = Client(TWILIO_SID, TWILIO_AUTH)
-    client.messages.create(body=message, from_=TWILIO_FROM, to=to_number)
-
-# -------- Login/Register Page -------- #
-def login_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)
-    st.title("SAR Flood Monitoring Dashboard - Login / Register")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
+
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button("Login"):
-            if username in st.session_state.users:
-                if st.session_state.users[username] == password:
-                    st.session_state.logged_in = True
-                    st.session_state.page = "monitoring"
-                    st.success(f"Welcome {username}!")
-                    st.experimental_rerun()
-                else:
-                    st.error("Incorrect password!")
+
+            if username in st.session_state.users and st.session_state.users[username] == password:
+                st.session_state.logged_in = True
+                st.success("Login successful")
+                st.experimental_rerun()
+
             else:
-                st.warning("User not registered! Please register first.")
+                st.error("Invalid login")
 
     with col2:
         if st.button("Register"):
-            if username and password:
-                if username not in st.session_state.users:
-                    st.session_state.users[username] = password
-                    st.success("User registered successfully! ✅ Please login.")
-                else:
-                    st.info("User already exists. Please login.")
-            else:
-                st.error("Please enter both Username and Password!")
 
-# -------- Logout -------- #
-def logout():
+            st.session_state.users[username] = password
+            st.success("User Registered")
+
+    st.stop()
+
+# ---------------- LOGOUT ---------------- #
+if st.button("Logout"):
     st.session_state.logged_in = False
-    st.session_state.page = "login"
     st.experimental_rerun()
 
-# -------- Monitoring Page -------- #
-def monitoring_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)
-    st.title("24-Hour Flood Monitoring (District-wise) - SAR")
-    st.button("Logout", on_click=logout)
+# ---------------- TITLE ---------------- #
+st.title("Real-Time Flood Prediction Dashboard 🌊")
 
-    district_selected = st.selectbox("Select District", districts)
-    city_for_weather = district_selected.split()[0]
-    temp, desc, rainfall = get_weather(city_for_weather)
+# ---------------- STATION ---------------- #
+station = st.selectbox(
+    "Select Station",
+    ["Bengaluru", "Mysuru", "Mangalore", "Hubli", "Belagavi"]
+)
 
-    if temp is not None:
-        st.markdown(f"### 🌡️ Temperature: {temp} °C")
-        st.markdown(f"Weather: {desc}")
-        st.markdown(f"🌧️ Rainfall last 1h: {rainfall} mm")
+# ---------------- WEATHER API ---------------- #
+API_KEY = "YOUR_OPENWEATHER_API_KEY"
+
+def get_weather(city):
+
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
+
+    response = requests.get(url)
+
+    data = response.json()
+
+    rainfall = 0
+
+    if "rain" in data:
+        rainfall = data["rain"].get("1h", 0)
+
+    temperature = data["main"]["temp"]
+
+    humidity = data["main"]["humidity"]
+
+    return rainfall, temperature, humidity
+
+rainfall, temperature, humidity = get_weather(station)
+
+st.subheader("Real-Time Weather Data")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Rainfall (mm)", rainfall)
+col2.metric("Temperature (°C)", temperature)
+col3.metric("Humidity (%)", humidity)
+
+# ---------------- RIVER LEVEL DATA ---------------- #
+river_level = st.slider("River Water Level (meters)", 0.0, 20.0, 5.0)
+
+soil_moisture = st.slider("Soil Moisture (%)", 0, 100, 40)
+
+# ---------------- ML MODEL ---------------- #
+
+def train_model():
+
+    X = np.array([
+        [10,2,30],
+        [100,8,80],
+        [50,5,50],
+        [200,10,90],
+        [20,3,40],
+        [300,15,95],
+        [5,1,20],
+        [400,18,98]
+    ])
+
+    y = np.array([0,1,0,1,0,1,0,1])
+
+    model = RandomForestClassifier(n_estimators=100)
+
+    model.fit(X,y)
+
+    return model
+
+model = train_model()
+
+# ---------------- PREDICTION ---------------- #
+
+st.subheader("Flood Risk Prediction")
+
+if st.button("Predict Flood Risk"):
+
+    features = np.array([[rainfall, river_level, soil_moisture]])
+
+    prediction = model.predict(features)[0]
+
+    if prediction == 1:
+
+        st.error("⚠️ Flood Risk Detected")
+
     else:
-        st.markdown("Weather data not available.")
 
-    # Dummy river water level
-    river_level = np.random.uniform(2.0, 8.0)
-    st.markdown(f"🌊 River Water Level: {river_level:.2f} m")
+        st.success("Area Safe")
 
-    # 24-hour flood risk
-    district_zone_risk = {dist: {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones} for dist in districts}
-    monitoring_data = []
-    for dist, zones_dict in district_zone_risk.items():
-        for zone, risk in zones_dict.items():
-            monitoring_data.append([dist, zone, risk])
+# ---------------- WEEKLY TREND ---------------- #
 
-    df_monitoring = pd.DataFrame(monitoring_data, columns=["District", "Zone", "Risk Level"])
-    df_filtered = df_monitoring[df_monitoring["District"] == district_selected]
-    st.dataframe(df_filtered.style.applymap(lambda x: f'color: {status_colors.get(x,"black")}', subset=["Risk Level"]), height=400)
+st.subheader("Flood Risk Trend")
 
-    # SAR image placeholder (replace with real dataset)
-    st.markdown("### 🛰️ Latest SAR Image")
-    try:
-        sar_image = Image.open(f"SAR_Images/{district_selected}.png")  # folder me images rakhni
-        st.image(sar_image, use_column_width=True)
-    except:
-        st.warning("SAR Image not available for this district yet.")
+dates = [datetime.now() - timedelta(days=i) for i in range(6,-1,-1)]
 
-    # Flood Heatmap
-    st.markdown("### 🌊 Flood Heatmap")
-    heatmap = np.random.randint(0,100,(10,10))  # dummy example
-    plt.imshow(heatmap, cmap="Reds")
-    plt.title(f"{district_selected} Flood Heatmap")
-    st.pyplot(plt.gcf())
+risk = np.random.randint(0,100,7)
 
-    if st.button("Go to Weekly Report"):
-        st.session_state.page = "weekly_report"
-        st.experimental_rerun()
+df = pd.DataFrame({
+    "date":dates,
+    "risk":risk
+})
 
-# -------- Weekly Report -------- #
-def weekly_report_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)
-    st.title("Weekly Flood Report - SAR")
-    st.button("Back to Monitoring", on_click=lambda: change_page("monitoring"))
-    st.button("Logout", on_click=logout)
+df["date"] = df["date"].dt.strftime("%d-%b")
 
-    dates = [datetime.now() - timedelta(days=i) for i in range(6, -1, -1)]
-    weekly_data = [np.random.randint(0, 100) for _ in range(7)]
-    df_weekly = pd.DataFrame({"Date": dates, "Flood Risk (%)": weekly_data})
-    df_weekly["Date"] = df_weekly["Date"].dt.strftime("%d-%b")
+fig, ax = plt.subplots()
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(df_weekly["Date"], df_weekly["Flood Risk (%)"], marker="o", linestyle="-", color="royalblue")
-    ax.set_title("Weekly Flood Risk Trend")
-    ax.set_ylabel("Flood Risk (%)")
-    ax.set_ylim(0, 100)
-    plt.xticks(rotation=45)
-    plt.grid(True)
-    st.pyplot(fig)
+ax.plot(df["date"],df["risk"],marker="o")
 
-def change_page(page_name):
-    st.session_state.page = page_name
-    st.experimental_rerun()
+ax.set_ylim(0,100)
 
-# -------- Main -------- #
-if not st.session_state.logged_in:
-    login_page()
-elif st.session_state.page == "monitoring":
-    monitoring_page()
-elif st.session_state.page == "weekly_report":
-    weekly_report_page()
+ax.set_ylabel("Flood Risk %")
+
+ax.set_title("Weekly Flood Trend")
+
+plt.xticks(rotation=45)
+
+st.pyplot(fig)
+
+# ---------------- SATELLITE FLOOD MAP ---------------- #
+
+st.subheader("Satellite Flood Map")
+
+Map = geemap.Map(center=[12.97,77.59], zoom=7)
+
+dataset = ee.ImageCollection("COPERNICUS/S1_GRD") \
+            .filterBounds(ee.Geometry.Point([77.59,12.97])) \
+            .filterDate("2024-01-01","2024-12-31")
+
+image = dataset.first()
+
+Map.addLayer(image, {}, "Sentinel SAR")
+
+Map.to_streamlit(height=500)
