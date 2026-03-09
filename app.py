@@ -25,6 +25,11 @@ def login_page():
     st.title("Login / Register")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
+
+    # Show info if no users are registered yet
+    if len(st.session_state.users) == 0:
+        st.info("No users registered yet. Please register first! 📝")
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -35,20 +40,29 @@ def login_page():
                 st.success(f"Welcome {username}!")
                 st.experimental_rerun()
             else:
-                st.error("Invalid username or password!")
+                st.error("Invalid username or password! ❌")
+
     with col2:
         if st.button("Register"):
             if username and password:
                 st.session_state.users[username] = password
-                st.success("User registered! Please login now.")
+                st.success("User registered! Please login now. ✅")
             else:
-                st.error("Enter both username and password.")
+                st.error("Enter both username and password! ⚠️")
 
 # ---------------- Logout Button ---------------- #
 def logout():
     st.session_state.logged_in = False
     st.session_state.page = "login"
     st.experimental_rerun()
+
+# ---------------- Sidebar ---------------- #
+st.sidebar.image("MA-logo.png", use_column_width=True)
+st.sidebar.markdown("## SAR-Flood-Mapping (Real-Time)")
+st.sidebar.markdown("""
+Detects and maps flood-affected areas using SAR data.
+Supports disaster response, environmental monitoring, and geospatial analysis.
+""")
 
 # ---------------- Karnataka Districts ---------------- #
 district_coords = {
@@ -163,7 +177,6 @@ def mapping_page():
     sar_image_file = os.path.join(sar_folder, f"{district.replace(' ','_')}_SAR.png")
     if os.path.exists(sar_image_file):
         st.image(sar_image_file, caption=f"{district} SAR Image", use_column_width=True)
-        st.markdown(f"[Open in new tab]({sar_image_file})", unsafe_allow_html=True)
     else:
         st.info("SAR Image not available for this district yet.")
 
@@ -171,11 +184,13 @@ def mapping_page():
     st.subheader("District Map")
     m = folium.Map(location=[lat, lon], zoom_start=7)
     folium.Marker([lat, lon], tooltip=district, popup=f"{district} Rainfall: {rainfall}mm").add_to(m)
+    
     geojson_file = "Sen1Floods11_Metadata.geojson"
     if os.path.exists(geojson_file):
         with open(geojson_file) as f:
             geojson_data = json.load(f)
         folium.GeoJson(geojson_data, name="Districts").add_to(m)
+
     st_folium(m, width=700, height=500)
 
 # ---------------- Page Control ---------------- #
