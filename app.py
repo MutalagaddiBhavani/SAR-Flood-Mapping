@@ -4,10 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import requests
-import os
 import folium
 import json
 from streamlit_folium import st_folium
+import os
 
 # ---------------- Page Config ---------------- #
 st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
@@ -18,51 +18,7 @@ if "logged_in" not in st.session_state:
 if "users" not in st.session_state:
     st.session_state.users = {}
 if "page" not in st.session_state:
-    st.session_state.page = "login"  # login, dashboard, mapping
-
-# ---------------- Login/Register Page ---------------- #
-def login_page():
-    st.title("Login / Register")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    # Show info if no users are registered yet
-    if len(st.session_state.users) == 0:
-        st.info("No users registered yet. Please register first! 📝")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("Login"):
-            if username in st.session_state.users and st.session_state.users[username] == password:
-                st.session_state.logged_in = True
-                st.session_state.page = "dashboard"
-                st.success(f"Welcome {username}!")
-                st.experimental_rerun()
-            else:
-                st.error("Invalid username or password! ❌")
-
-    with col2:
-        if st.button("Register"):
-            if username and password:
-                st.session_state.users[username] = password
-                st.success("User registered! Please login now. ✅")
-            else:
-                st.error("Enter both username and password! ⚠️")
-
-# ---------------- Logout Button ---------------- #
-def logout():
-    st.session_state.logged_in = False
     st.session_state.page = "login"
-    st.experimental_rerun()
-
-# ---------------- Sidebar ---------------- #
-st.sidebar.image("MA-logo.png", use_column_width=True)
-st.sidebar.markdown("## SAR-Flood-Mapping")
-st.sidebar.markdown("""
-Detects and maps flood-affected areas using SAR data.
-Supports disaster response, environmental monitoring, and geospatial analysis.
-""")
 
 # ---------------- Karnataka Districts ---------------- #
 district_coords = {
@@ -102,6 +58,68 @@ zones = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 risk_levels = ["Safe", "Monitoring", "Active Alert", "Critical"]
 status_colors = {"Safe": "green", "Monitoring": "blue", "Active Alert": "orange", "Critical": "red"}
 
+# ---------------- Login/Register Page ---------------- #
+def login_page():
+    st.title("Login / Register")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if len(st.session_state.users) == 0:
+        st.info("No users registered yet. Please register first! 📝")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Login"):
+            if username in st.session_state.users and st.session_state.users[username] == password:
+                st.session_state.logged_in = True
+                st.session_state.page = "dashboard"
+                st.success(f"Welcome {username}!")
+                st.experimental_rerun()
+            else:
+                st.error("Invalid username or password! ❌")
+    with col2:
+        if st.button("Register"):
+            if username and password:
+                st.session_state.users[username] = password
+                st.success("User registered! Please login now. ✅")
+            else:
+                st.error("Enter both username and password! ⚠️")
+
+# ---------------- Logout ---------------- #
+def logout():
+    st.session_state.logged_in = False
+    st.session_state.page = "login"
+    st.experimental_rerun()
+
+# ---------------- Get Real-time Weather ---------------- #
+def get_weather(lat, lon):
+    try:
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=precipitation,temperature_2m,windspeed_10m&timezone=Asia/Kolkata"
+        r = requests.get(url, timeout=5)
+        data = r.json()
+        precipitation_list = data['hourly']['precipitation']
+        temperature_list = data['hourly']['temperature_2m']
+        windspeed_list = data['hourly']['windspeed_10m']
+        time_list = data['hourly']['time']
+
+        from datetime import datetime
+        now = datetime.now().strftime("%Y-%m-%dT%H:00")
+        if now in time_list:
+            idx = time_list.index(now)
+        else:
+            idx = 0
+
+        rainfall = precipitation_list[idx]
+        temp = temperature_list[idx]
+        wind = windspeed_list[idx]
+
+    except Exception:
+        rainfall = 0
+        temp = 0
+        wind = 0
+
+    return rainfall, wind, temp
+
 # ---------------- Dashboard Page ---------------- #
 def dashboard_page():
     st.title("SAR Flood Monitoring Dashboard 🌊")
@@ -109,12 +127,12 @@ def dashboard_page():
 
     st.subheader("Select District")
     district = st.selectbox("District", list(district_coords.keys()))
-    
+
     # 24-hour district risk monitoring (simulated)
     st.markdown("### 24-Hour Flood Monitoring (District-wise)")
     district_zone_risk = {}
     for dist in district_coords.keys():
-        district_zone_risk[dist] = {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones}
+        district_zone_risk[dist] = {zone: np.random.choice(risk_levels, p=[0.3, 0.3, 0.3, 0.1]) for zone in zones}
 
     monitoring_data = []
     for dist, zones_dict in district_zone_risk.items():
@@ -130,11 +148,11 @@ def dashboard_page():
     df_weekly = pd.DataFrame({"Date": dates, "Flood Risk (%)": weekly_data})
     df_weekly["Date"] = df_weekly["Date"].dt.strftime("%d-%b")
 
-    fig, ax = plt.subplots(figsize=(10,4))
+    fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(df_weekly["Date"], df_weekly["Flood Risk (%)"], marker="o", linestyle="-", color="royalblue")
     ax.set_title(f"Weekly Flood Risk Trend - District: {district}")
     ax.set_ylabel("Flood Risk (%)")
-    ax.set_ylim(0,100)
+    ax.set_ylim(0, 100)
     plt.xticks(rotation=45)
     plt.grid(True)
     st.pyplot(fig)
@@ -146,25 +164,11 @@ def dashboard_page():
 # ---------------- Flood Mapping Page ---------------- #
 def mapping_page():
     st.title("Flood Mapping & SAR Images 🛰️")
-    st.button("Back to Dashboard", on_click=lambda: st.session_state.update({"page":"dashboard"}))
-    
+    st.button("Back to Dashboard", on_click=lambda: st.session_state.update({"page": "dashboard"}))
+
     st.subheader("Select District")
     district = st.selectbox("District", list(district_coords.keys()))
     lat, lon = district_coords[district]
-
-    # Real-time weather
-    def get_weather(lat, lon):
-        try:
-            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
-            r = requests.get(url, timeout=5)
-            data = r.json()
-            weather = data.get('current_weather', {})
-            rainfall = weather.get('precipitation', 0)
-            wind = weather.get('windspeed', 0)
-            temp = weather.get('temperature', 0)
-        except:
-            rainfall = wind = temp = 0
-        return rainfall, wind, temp
 
     rainfall, wind, temp = get_weather(lat, lon)
     st.metric("Rainfall (mm)", rainfall)
@@ -173,18 +177,26 @@ def mapping_page():
 
     # SAR Image display
     st.subheader("Latest SAR Image")
-    sar_folder = "S1"
-    sar_image_file = os.path.join(sar_folder, f"{district.replace(' ','_')}_SAR.png")
-    if os.path.exists(sar_image_file):
-        st.image(sar_image_file, caption=f"{district} SAR Image", use_column_width=True)
+    sar_filename = f"{district.replace(' ', '_')}_SAR.png"
+
+    # Try local folder first
+    local_path = os.path.join("S1", sar_filename)
+    if os.path.exists(local_path):
+        st.image(local_path, caption=f"{district} SAR Image", use_column_width=True)
     else:
-        st.info("SAR Image not available for this district yet.")
+        # Try remote GitHub URL (replace username/repo/path with actual)
+        sar_url = f"https://raw.githubusercontent.com/your_github_username/your_repo_name/main/S1/{sar_filename}"
+        try:
+            st.image(sar_url, caption=f"{district} SAR Image", use_column_width=True)
+        except:
+            st.info("SAR Image not available for this district yet.")
 
     # Map visualization
     st.subheader("District Map")
     m = folium.Map(location=[lat, lon], zoom_start=7)
     folium.Marker([lat, lon], tooltip=district, popup=f"{district} Rainfall: {rainfall}mm").add_to(m)
-    
+
+    # Load geojson if available
     geojson_file = "Sen1Floods11_Metadata.geojson"
     if os.path.exists(geojson_file):
         with open(geojson_file) as f:
@@ -193,11 +205,10 @@ def mapping_page():
 
     st_folium(m, width=700, height=500)
 
-# ---------------- Page Control ---------------- #
+# ---------------- Main App Flow ---------------- #
 if not st.session_state.logged_in:
     login_page()
 elif st.session_state.page == "dashboard":
     dashboard_page()
 elif st.session_state.page == "mapping":
     mapping_page()
-
