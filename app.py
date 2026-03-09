@@ -3,17 +3,18 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+from sklearn.ensemble import RandomForestClassifier
 
 # ---------------- Page Config ---------------- #
-st.set_page_config(layout="wide", page_title="SAR Flood Mapping Dashboard")
+st.set_page_config(layout="wide", page_title="SAR Flood Mapping with ML")
 
 # ---------------- Sidebar ---------------- #
 st.sidebar.image("MA-logo.png", use_column_width=True)
-st.sidebar.markdown("## SAR-Flood-Mapping")
+st.sidebar.markdown("## SAR-Flood-Mapping (ML Edition)")
 st.sidebar.markdown(
     """
-    SAR-Flood-Mapping detects and maps flood-affected areas using Synthetic Aperture Radar (SAR) data.
-    Supports disaster response, environmental monitoring, and geospatial analysis even under cloud cover.
+    This app predicts flood risk using a simple ML model based on user inputs.
+    Replace the dummy model with your own trained model for real results.
     """
 )
 
@@ -28,14 +29,16 @@ if not st.session_state.logged_in:
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if st.button("Login"):
             if username in st.session_state.users and st.session_state.users[username] == password:
                 st.session_state.logged_in = True
                 st.success(f"Welcome {username}!")
+                st.experimental_rerun()
             else:
                 st.error("Invalid username or password!")
+
     with col2:
         if st.button("Register"):
             if username and password:
@@ -43,7 +46,7 @@ if not st.session_state.logged_in:
                 st.success("User registered! Please login now.")
             else:
                 st.error("Enter both username and password.")
-    st.stop()  # Stop the app until login is successful
+    st.stop()
 
 # ---------------- Logout ---------------- #
 if st.button("Logout"):
@@ -51,7 +54,7 @@ if st.button("Logout"):
     st.experimental_rerun()
 
 # ---------------- Main Dashboard ---------------- #
-st.title(f"Welcome to SAR Flood Monitoring Dashboard 🌊")
+st.title("Welcome to SAR Flood Monitoring Dashboard 🌊 (ML Version)")
 
 # ---------------- Karnataka Districts & Zones ---------------- #
 districts = [
@@ -75,25 +78,45 @@ status_colors = {
 st.subheader("Select Station in Karnataka")
 station = st.selectbox("Station", ["Bengaluru", "Mysuru", "Mangalore", "Hubli", "Belagavi"])
 
-st.markdown("### Current 24-Hour Flood Monitoring (District-wise)")
+# ---------------- ML Model Training (Dummy Data) ---------------- #
+# This is just for demonstration, replace with your actual model and data
+def train_dummy_model():
+    # Features: rainfall(mm), river_level(m), soil_moisture(%)
+    X = np.array([
+        [10, 2.0, 30],
+        [100, 8.0, 80],
+        [50, 5.0, 50],
+        [200, 10.0, 90],
+        [20, 3.0, 40],
+        [300, 15.0, 95],
+        [5, 1.5, 20],
+        [400, 18.0, 98]
+    ])
+    # Labels: 0 = Safe, 1 = Flood Risk
+    y = np.array([0, 1, 0, 1, 0, 1, 0, 1])
 
-# Generate simulated district + zone risk levels
-district_zone_risk = {}
-for dist in districts:
-    district_zone_risk[dist] = {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones}
+    model = RandomForestClassifier(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    return model
 
-# Display the table
-monitoring_data = []
-for dist, zones_dict in district_zone_risk.items():
-    for zone, risk in zones_dict.items():
-        monitoring_data.append([dist, zone, risk])
+model = train_dummy_model()
 
-df_monitoring = pd.DataFrame(monitoring_data, columns=["District", "Zone", "Risk Level"])
-st.dataframe(df_monitoring.style.applymap(
-    lambda x: f'color: {status_colors[x]}' if x in status_colors else ''
-))
+st.markdown("### Predict Flood Risk using ML Model")
 
-# ---------------- Weekly Report ---------------- #
+rainfall = st.number_input("Rainfall (mm)", 0, 500, 50)
+river_level = st.number_input("River Level (m)", 0.0, 20.0, 5.0)
+soil_moisture = st.number_input("Soil Moisture (%)", 0, 100, 40)
+
+if st.button("Predict Flood Risk"):
+    input_features = np.array([[rainfall, river_level, soil_moisture]])
+    prediction = model.predict(input_features)[0]
+
+    if prediction == 1:
+        st.error("⚠️ High Flood Risk Detected! Take Precautions!")
+    else:
+        st.success("✅ Area is Safe. No Immediate Flood Risk.")
+
+# ---------------- Weekly Report (Simulated) ---------------- #
 st.subheader("Weekly Flood Report")
 dates = [datetime.now() - timedelta(days=i) for i in range(6, -1, -1)]
 weekly_data = [np.random.randint(0, 100) for _ in range(7)]  # simulated % flood risk
