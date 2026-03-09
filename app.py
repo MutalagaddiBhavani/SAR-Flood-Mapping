@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
 from sklearn.ensemble import RandomForestClassifier
-import os
 
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(
@@ -109,22 +108,23 @@ def get_river_level():
 
 # ---------------- SIDEBAR ---------------- #
 
+# ---------------- SIDEBAR ---------------- #
 def sidebar_info():
 
-    logo_path = "images/logo.png"
+    st.sidebar.image("MA-logo.png", use_container_width=True)
 
-    if os.path.exists(logo_path):
-        st.sidebar.image(logo_path, use_container_width=True)
-    else:
-        st.sidebar.warning("Logo file not found")
+    st.sidebar.markdown("## SAR Flood Mapping")
 
-    st.sidebar.title("MAP ACTION")
-
-    st.sidebar.write(
+    st.sidebar.markdown(
         """
-        SAR Flood Mapping is a project for detecting and mapping flood-affected areas using Synthetic Aperture Radar (SAR) satellite imagery.
-        """
+SAR-Flood-Mapping detects flood-affected regions using Synthetic Aperture Radar (SAR)
+satellite imagery and machine learning.
+
+It helps disaster management authorities monitor flood risk even during
+cloud cover or night conditions.
+"""
     )
+
 
 # ---------------- LOGIN PAGE ---------------- #
 def login_page():
@@ -265,5 +265,6 @@ elif st.session_state.page == "monitoring":
 elif st.session_state.page == "weekly_report":
 
     weekly_report()
+
 
 
