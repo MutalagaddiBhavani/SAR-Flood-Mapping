@@ -24,7 +24,7 @@ district_coords = {
     "Mangalore": (12.9141, 74.8560),
     "Hubli-Dharwad": (15.3647, 75.1240),
     "Belagavi": (15.8497, 74.4977)
-    # add other districts similarly
+    # Add other districts similarly
 }
 
 risk_levels = ["Safe","Monitoring","Active Alert","Critical"]
@@ -40,11 +40,21 @@ def get_dummy_river_level(lat, lon):
     level = np.random.uniform(1,15)
     return round(level,2)
 
-# ---------------- Login Page ---------------- #
-def login_page():
+# ---------------- Sidebar Info ---------------- #
+def sidebar_info():
     st.sidebar.image("MA-logo.png", use_column_width=True)
     st.sidebar.markdown("## SAR Flood Mapping")
-    st.sidebar.markdown("Synthetic Aperture Radar (SAR) data based flood monitoring dashboard for Karnataka districts. Supports flood risk prediction and visualization.")
+    st.sidebar.markdown(
+        "SAR-Flood-Mapping is a project for detecting and mapping flood-affected areas "
+        "using Synthetic Aperture Radar (SAR) satellite imagery. It processes SAR data "
+        "to identify water bodies and generate flood extent maps, supporting disaster "
+        "response, environmental monitoring, and geospatial analysis even under cloud "
+        "cover or low-light conditions."
+    )
+
+# ---------------- Login Page ---------------- #
+def login_page():
+    sidebar_info()
     
     st.title("SAR Flood Monitoring Dashboard - Login/Register")
     username = st.text_input("Username")
@@ -74,13 +84,12 @@ def logout():
 
 # ---------------- Monitoring Page ---------------- #
 def monitoring_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)
-    st.sidebar.markdown("## SAR Flood Mapping")
-    st.sidebar.markdown("Synthetic Aperture Radar (SAR) data based flood monitoring dashboard for Karnataka districts. Supports flood risk prediction and visualization.")
+    sidebar_info()
     
     st.title("24-Hour Flood Monitoring (District-wise)")
     st.button("Logout", on_click=logout)
     
+    # Select district
     district = st.selectbox("Select District", list(district_coords.keys()))
     lat, lon = district_coords[district]
     
@@ -88,6 +97,7 @@ def monitoring_page():
     temp, rainfall = get_dummy_weather(lat, lon)
     river_level = get_dummy_river_level(lat, lon)
     
+    # Display metrics
     st.metric("Temperature (°C)", temp)
     st.metric("Rainfall (mm)", rainfall)
     st.metric("River Level (m)", river_level)
@@ -97,20 +107,24 @@ def monitoring_page():
     risk = "Critical" if risk_score>50 else "Active Alert" if risk_score>30 else "Monitoring" if risk_score>10 else "Safe"
     st.markdown(f"**Flood Risk Status:** <span style='color:{status_colors[risk]}'>{risk}</span>", unsafe_allow_html=True)
     
-    # Map display
+    # Show only selected district on map
     st.markdown("### District Location")
     m = folium.Map(location=[lat, lon], zoom_start=10)
-    folium.Marker([lat, lon], popup=f"{district} - {risk}", tooltip=district).add_to(m)
-    st_data = st_folium(m, width=700, height=400)
+    folium.Marker(
+        [lat, lon], 
+        popup=f"{district} - {risk}", 
+        tooltip=district,
+        icon=folium.Icon(color=status_colors[risk])
+    ).add_to(m)
+    st_folium(m, width=700, height=400)
     
+    # Weekly Report button
     if st.button("Weekly Report"):
         st.session_state.page = "weekly_report"
 
 # ---------------- Weekly Report ---------------- #
 def weekly_report():
-    st.sidebar.image("MA-logo.png", use_column_width=True)
-    st.sidebar.markdown("## SAR Flood Mapping")
-    st.sidebar.markdown("Synthetic Aperture Radar (SAR) data based flood monitoring dashboard for Karnataka districts. Supports flood risk prediction and visualization.")
+    sidebar_info()
     
     st.title("Weekly Flood Report")
     st.button("Back", on_click=lambda: st.session_state.update({"page":"monitoring"}))
