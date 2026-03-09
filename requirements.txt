@@ -1,18 +1,8 @@
-# Streamlit app framework
-streamlit==1.28.0
-
-# Numerical computations
-numpy==1.26.2
-
-# Data manipulation
-pandas==2.1.1
-
-# Plotting
-matplotlib==3.8.0
-
-# Machine Learning
-scikit-learn==1.3.2
-
-# Image handling (for logo, optional but recommended)
-Pillow==10.1.0
-
+streamlit==1.30.0             # Streamlit for UI
+numpy==1.26.0                 # Numerical operations
+pandas==2.1.0                 # DataFrames
+matplotlib==3.8.0             # Plotting charts
+scikit-learn==1.3.2           # ML model (RandomForest)
+requests==2.32.0              # API calls for real-time weather
+folium==0.19.0                # Map visualization
+streamlit-folium==0.11.0      # Folium integration in Streamlit
