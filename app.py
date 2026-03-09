@@ -109,8 +109,10 @@ def get_river_level():
 # ---------------- SIDEBAR ---------------- #
 def sidebar_info():
 
-    st.sidebar.image("images/logo.png", use_container_width=True)
-
+    st.sidebar.image(
+    "https://upload.wikimedia.org/wikipedia/commons/6/6f/Earth_icon_2.png",
+    use_container_width=True
+)
     st.sidebar.markdown("## SAR Flood Mapping")
 
     st.sidebar.markdown(
@@ -262,3 +264,4 @@ elif st.session_state.page == "monitoring":
 elif st.session_state.page == "weekly_report":
 
     weekly_report()
+
