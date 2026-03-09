@@ -4,9 +4,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import requests
+from twilio.rest import Client
 
 # -------- Page Config -------- #
-st.set_page_config(layout="wide", page_title="SAR Flood Monitoring")
+st.set_page_config(layout="wide", page_title="SAR Flood Monitoring Dashboard")
 
 # -------- Session State -------- #
 if "logged_in" not in st.session_state:
@@ -35,7 +36,7 @@ status_colors = {
 }
 
 # -------- OpenWeatherMap API key -------- #
-API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"  # <-- Yahan apni API key dalen
+API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"  # put your API key here
 
 def get_weather(city):
     try:
@@ -45,16 +46,26 @@ def get_weather(city):
             data = response.json()
             temp = data['main']['temp']
             desc = data['weather'][0]['description'].title()
-            return temp, desc
+            rain_1h = data.get("rain", {}).get("1h", 0)
+            return temp, desc, rain_1h
         else:
-            return None, None
+            return None, None, None
     except Exception:
-        return None, None
+        return None, None, None
+
+# -------- Twilio SMS Example -------- #
+TWILIO_SID = "YOUR_TWILIO_SID"
+TWILIO_AUTH = "YOUR_TWILIO_AUTH_TOKEN"
+TWILIO_FROM = "+1234567890"  # Twilio number
+
+def send_sms(message, to_number):
+    client = Client(TWILIO_SID, TWILIO_AUTH)
+    client.messages.create(body=message, from_=TWILIO_FROM, to=to_number)
 
 # -------- Login/Register Page -------- #
 def login_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)  # Sidebar logo
-    st.title("Login / Register")
+    st.sidebar.image("MA-logo.png", use_column_width=True)
+    st.title("SAR Flood Monitoring Dashboard - Login / Register")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     col1, col2 = st.columns(2)
@@ -68,7 +79,7 @@ def login_page():
                     st.success(f"Welcome {username}!")
                     st.experimental_rerun()
                 else:
-                    st.error("Incorrect password! ❌")
+                    st.error("Incorrect password!")
             else:
                 st.warning("User not registered! Please register first.")
 
@@ -81,7 +92,7 @@ def login_page():
                 else:
                     st.info("User already exists. Please login.")
             else:
-                st.error("Enter both username and password!")
+                st.error("Please enter both Username and Password!")
 
 # -------- Logout -------- #
 def logout():
@@ -89,30 +100,29 @@ def logout():
     st.session_state.page = "login"
     st.experimental_rerun()
 
-# -------- District-wise 24-Hour Flood Monitoring Page -------- #
+# -------- Monitoring Page -------- #
 def monitoring_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)  # Sidebar logo
-    st.title("24-Hour Flood Monitoring (District-wise)")
+    st.sidebar.image("MA-logo.png", use_column_width=True)
+    st.title("24-Hour Flood Monitoring (District-wise) - SAR")
     st.button("Logout", on_click=logout)
 
     district_selected = st.selectbox("Select District", districts)
-
-    # Fetch weather for the selected district (city name approximate)
-    # Note: Some district names might differ from city names recognized by OpenWeatherMap
-    city_for_weather = district_selected.split()[0]  # Take first word for simplicity
-    temp, desc = get_weather(city_for_weather)
+    city_for_weather = district_selected.split()[0]
+    temp, desc, rainfall = get_weather(city_for_weather)
 
     if temp is not None:
-        st.markdown(f"### Current Temperature in {district_selected}: {temp} °C")
-        st.markdown(f"**Weather:** {desc}")
+        st.markdown(f"### 🌡️ Temperature: {temp} °C")
+        st.markdown(f"Weather: {desc}")
+        st.markdown(f"🌧️ Rainfall last 1h: {rainfall} mm")
     else:
-        st.markdown(f"Weather data not available for {district_selected}.")
+        st.markdown("Weather data not available.")
 
-    # Simulated district + zone risk levels
-    district_zone_risk = {}
-    for dist in districts:
-        district_zone_risk[dist] = {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones}
+    # Dummy river water level
+    river_level = np.random.uniform(2.0, 8.0)
+    st.markdown(f"🌊 River Water Level: {river_level:.2f} m")
 
+    # Simulated 24-hour flood risk
+    district_zone_risk = {dist: {zone: np.random.choice(risk_levels, p=[0.3,0.3,0.3,0.1]) for zone in zones} for dist in districts}
     monitoring_data = []
     for dist, zones_dict in district_zone_risk.items():
         for zone, risk in zones_dict.items():
@@ -120,25 +130,28 @@ def monitoring_page():
 
     df_monitoring = pd.DataFrame(monitoring_data, columns=["District", "Zone", "Risk Level"])
     df_filtered = df_monitoring[df_monitoring["District"] == district_selected]
+    st.dataframe(df_filtered.style.applymap(lambda x: f'color: {status_colors.get(x,"black")}', subset=["Risk Level"]), height=400)
 
-    def color_risk(val):
-        return f'color: {status_colors.get(val, "black")}'
-    st.dataframe(df_filtered.style.applymap(color_risk, subset=["Risk Level"]), height=400)
-
+    # Dummy AI Flood Detection Map
+    st.markdown("### 🛰️ AI Flood Detection Map (Dummy Example)")
+    flood_map = np.random.randint(0,2,(100,100))
+    plt.imshow(flood_map, cmap="Blues")
+    plt.title(f"{district_selected} Flood Map")
+    st.pyplot(plt.gcf())
+    
     if st.button("Go to Weekly Report"):
         st.session_state.page = "weekly_report"
         st.experimental_rerun()
 
-# -------- Weekly Report Page -------- #
+# -------- Weekly Report -------- #
 def weekly_report_page():
-    st.sidebar.image("MA-logo.png", use_column_width=True)  # Sidebar logo
-    st.title("Weekly Flood Risk Report")
+    st.sidebar.image("MA-logo.png", use_column_width=True)
+    st.title("Weekly Flood Report - SAR")
     st.button("Back to Monitoring", on_click=lambda: change_page("monitoring"))
     st.button("Logout", on_click=logout)
 
     dates = [datetime.now() - timedelta(days=i) for i in range(6, -1, -1)]
     weekly_data = [np.random.randint(0, 100) for _ in range(7)]
-
     df_weekly = pd.DataFrame({"Date": dates, "Flood Risk (%)": weekly_data})
     df_weekly["Date"] = df_weekly["Date"].dt.strftime("%d-%b")
 
