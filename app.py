@@ -1,65 +1,30 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import requests
+import json
+import hashlib
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
+from sklearn.ensemble import RandomForestClassifier
 import folium
 from streamlit_folium import st_folium
-from sklearn.ensemble import RandomForestClassifier
 
-# ---------------- PAGE CONFIG ---------------- #
+# ---------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------
+
 st.set_page_config(
-    page_title="SAR Flood Monitoring Dashboard",
+    page_title="SAR Flood Mapping",
     layout="wide"
 )
 
-# ---------------- SESSION STATE ---------------- #
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+# ---------------------------------------------------
+# CONSTANTS
+# ---------------------------------------------------
 
-if "users" not in st.session_state:
-    st.session_state.users = {}
-
-if "page" not in st.session_state:
-    st.session_state.page = "login"
-
-# ---------------- DISTRICT COORDINATES ---------------- #
-district_coords = {
-    "Bagalkot": (16.1667, 75.7000),
-    "Ballari": (15.1394, 76.9214),
-    "Belagavi": (15.8497, 74.4977),
-    "Bengaluru Rural": (12.9770, 77.5660),
-    "Bengaluru Urban": (12.9716, 77.5946),
-    "Bidar": (17.9133, 77.5299),
-    "Chamarajanagar": (11.9141, 76.9507),
-    "Chikkaballapura": (13.4357, 77.7299),
-    "Chikkamagaluru": (13.3193, 75.7754),
-    "Chitradurga": (14.2300, 76.4000),
-    "Dakshina Kannada": (12.9141, 74.8560),
-    "Davanagere": (14.4667, 75.9167),
-    "Dharwad": (15.4589, 75.0078),
-    "Gadag": (15.4270, 75.6320),
-    "Hassan": (13.0076, 76.1020),
-    "Haveri": (14.8000, 75.4000),
-    "Kalaburagi": (17.3297, 76.8343),
-    "Kodagu": (12.3375, 75.8069),
-    "Kolar": (13.1363, 78.1298),
-    "Koppal": (15.3456, 76.1545),
-    "Mandya": (12.5231, 76.8950),
-    "Mysuru": (12.2958, 76.6394),
-    "Raichur": (16.2109, 77.3666),
-    "Ramanagara": (12.7024, 77.2852),
-    "Shivamogga": (13.9299, 75.5681),
-    "Tumakuru": (13.3392, 77.1130),
-    "Udupi": (13.3409, 74.7421),
-    "Uttara Kannada": (14.6166, 74.6165),
-    "Vijayapura": (16.8302, 75.7100),
-    "Yadgir": (16.7742, 77.1322)
-}
-
-# ---------------- WEATHER DATA ---------------- #
-current_temps = {district: np.random.randint(29,38) for district in district_coords}
-current_rainfall = {district: np.random.randint(0,20) for district in district_coords}
+USERS_FILE = "users.json"
+API_KEY = "YOUR_OPENWEATHER_API_KEY"
 
 status_colors = {
     "Safe":"green",
@@ -68,88 +33,185 @@ status_colors = {
     "Critical":"red"
 }
 
-# ---------------- ML TRAINING DATA ---------------- #
-def generate_training_data():
+# ---------------------------------------------------
+# DISTRICT COORDINATES
+# ---------------------------------------------------
 
-    data = []
+district_coords = {
 
-    for _ in range(500):
+"Bengaluru Urban": (12.9716,77.5946),
+"Mysuru": (12.2958,76.6394),
+"Mangaluru": (12.9141,74.8560),
+"Belagavi": (15.8497,74.4977),
+"Tumakuru": (13.3392,77.1130),
+"Shivamogga": (13.9299,75.5681),
+"Hassan": (13.0076,76.1020),
+"Raichur": (16.2109,77.3666),
+"Udupi": (13.3409,74.7421),
+"Ballari": (15.1394,76.9214)
 
-        rainfall = np.random.uniform(0,200)
-        river = np.random.uniform(0,15)
-        temp = np.random.uniform(20,40)
+}
 
-        if rainfall > 150 or river > 12:
-            risk = "Critical"
-        elif rainfall > 100 or river > 9:
-            risk = "Active Alert"
-        elif rainfall > 40 or river > 5:
-            risk = "Monitoring"
+# ---------------------------------------------------
+# SESSION STATE
+# ---------------------------------------------------
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "page" not in st.session_state:
+    st.session_state.page = "login"
+
+# ---------------------------------------------------
+# PASSWORD HASHING
+# ---------------------------------------------------
+
+def hash_password(password):
+
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ---------------------------------------------------
+# USER STORAGE
+# ---------------------------------------------------
+
+def load_users():
+
+    try:
+        with open(USERS_FILE,"r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_users(users):
+
+    with open(USERS_FILE,"w") as f:
+        json.dump(users,f)
+
+users = load_users()
+
+# ---------------------------------------------------
+# WEATHER API
+# ---------------------------------------------------
+
+def get_weather(lat,lon):
+
+    try:
+
+        url=f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
+
+        response=requests.get(url).json()
+
+        temp=response["main"]["temp"]
+
+        rainfall=response.get("rain",{}).get("1h",0)
+
+        return temp,rainfall
+
+    except:
+
+        temp=np.random.uniform(25,35)
+        rainfall=np.random.uniform(0,20)
+
+        return temp,rainfall
+
+# ---------------------------------------------------
+# RIVER LEVEL SIMULATION
+# ---------------------------------------------------
+
+def river_level():
+
+    return round(np.random.uniform(2,14),2)
+
+# ---------------------------------------------------
+# MACHINE LEARNING MODEL
+# ---------------------------------------------------
+
+def train_model():
+
+    data=[]
+
+    for _ in range(1000):
+
+        rainfall=np.random.uniform(0,200)
+        river=np.random.uniform(0,15)
+        temp=np.random.uniform(20,40)
+
+        if rainfall>150 or river>12:
+            risk="Critical"
+
+        elif rainfall>100 or river>9:
+            risk="Active Alert"
+
+        elif rainfall>50 or river>6:
+            risk="Monitoring"
+
         else:
-            risk = "Safe"
+            risk="Safe"
 
         data.append([rainfall,river,temp,risk])
 
-    df = pd.DataFrame(data,columns=["rainfall","river","temp","risk"])
+    df=pd.DataFrame(data,columns=["rain","river","temp","risk"])
 
-    return df
+    X=df[["rain","river","temp"]]
+    y=df["risk"]
 
-df = generate_training_data()
+    model=RandomForestClassifier(n_estimators=200)
 
-X = df[["rainfall","river","temp"]]
-y = df["risk"]
+    model.fit(X,y)
 
-model = RandomForestClassifier()
-model.fit(X,y)
+    return model
 
-# ---------------- RIVER LEVEL ---------------- #
-def get_river_level():
-    return round(np.random.uniform(1,15),2)
+model=train_model()
 
-# ---------------- SIDEBAR ---------------- #
+# ---------------------------------------------------
+# SIDEBAR
+# ---------------------------------------------------
 
-# ---------------- SIDEBAR ---------------- #
-def sidebar_info():
+def sidebar():
 
-    st.sidebar.image("MA-logo.png", use_container_width=True)
+    st.sidebar.title("SAR Flood Mapping")
 
-    st.sidebar.markdown("## SAR Flood Mapping")
+    st.sidebar.info("""
 
-    st.sidebar.markdown(
-        """
-SAR-Flood-Mapping detects flood-affected regions using Synthetic Aperture Radar (SAR)
-satellite imagery and machine learning.
+SAR Flood Mapping detects flood-prone regions using
 
-It helps disaster management authorities monitor flood risk even during
-cloud cover or night conditions.
-"""
-    )
+• Satellite SAR Analysis  
+• Weather Monitoring  
+• Machine Learning  
+• River Level Monitoring  
 
+This system helps disaster management teams monitor flood risk in real time.
 
-# ---------------- LOGIN PAGE ---------------- #
+""")
+
+# ---------------------------------------------------
+# LOGIN PAGE
+# ---------------------------------------------------
+
 def login_page():
 
-    sidebar_info()
+    sidebar()
 
-    st.title("SAR Flood Monitoring Dashboard - Login/Register")
+    st.title("SAR Flood Mapping - Login")
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    username=st.text_input("Username")
 
-    col1,col2 = st.columns(2)
+    password=st.text_input("Password",type="password")
+
+    col1,col2=st.columns(2)
 
     with col1:
 
         if st.button("Login"):
 
-            if username in st.session_state.users and st.session_state.users[username] == password:
+            if username in users and users[username]==hash_password(password):
 
-                st.session_state.logged_in = True
-                st.session_state.page = "monitoring"
+                st.session_state.logged_in=True
+                st.session_state.page="dashboard"
 
             else:
 
-                st.error("User not registered")
+                st.error("Invalid Login")
 
     with col2:
 
@@ -157,114 +219,169 @@ def login_page():
 
             if username and password:
 
-                st.session_state.users[username] = password
-                st.success("User Registered")
+                users[username]=hash_password(password)
 
-# ---------------- LOGOUT ---------------- #
-def logout():
+                save_users(users)
 
-    st.session_state.logged_in = False
-    st.session_state.page = "login"
+                st.success("User Registered Successfully")
 
-# ---------------- MONITORING PAGE ---------------- #
-def monitoring_page():
+# ---------------------------------------------------
+# DASHBOARD
+# ---------------------------------------------------
 
-    sidebar_info()
+def dashboard():
 
-    st.title("24-Hour Flood Monitoring")
+    sidebar()
 
-    st.button("Logout", on_click=logout)
+    st.title("🌊 SAR Flood Mapping Dashboard")
 
-    district = st.selectbox("Select District", list(district_coords.keys()))
+    if st.button("Logout"):
 
-    lat,lon = district_coords[district]
+        st.session_state.logged_in=False
+        st.session_state.page="login"
 
-    temp = current_temps[district]
-    rainfall = current_rainfall[district]
-    river = get_river_level()
+    district=st.selectbox("Select District",list(district_coords.keys()))
 
-    col1,col2,col3 = st.columns(3)
+    lat,lon=district_coords[district]
 
-    col1.metric("Temperature °C", temp)
-    col2.metric("Rainfall mm", rainfall)
-    col3.metric("River Level m", river)
+    temp,rain=get_weather(lat,lon)
 
-    # ML Prediction
-    prediction = model.predict([[rainfall,river,temp]])
+    river=river_level()
 
-    risk = prediction[0]
+    col1,col2,col3=st.columns(3)
+
+    col1.metric("Temperature (°C)",round(temp,1))
+    col2.metric("Rainfall (mm)",rain)
+    col3.metric("River Level (m)",river)
+
+    prediction=model.predict([[rain,river,temp]])
+
+    risk=prediction[0]
 
     st.markdown(
-        f"### Flood Risk Status: <span style='color:{status_colors[risk]}'>{risk}</span>",
+        f"## Flood Risk Status: <span style='color:{status_colors[risk]}'>{risk}</span>",
         unsafe_allow_html=True
     )
 
-    # Map
-    st.markdown("### District Location")
+# ---------------------------------------------------
+# RISK GAUGE
+# ---------------------------------------------------
 
-    m = folium.Map(location=[lat,lon], zoom_start=9)
+    risk_score={"Safe":25,"Monitoring":50,"Active Alert":75,"Critical":100}[risk]
 
-    folium.Marker(
-        [lat,lon],
-        popup=f"{district} - {risk}",
-        tooltip=district,
-        icon=folium.Icon(color=status_colors[risk])
-    ).add_to(m)
+    fig=go.Figure(go.Indicator(
 
-    st_folium(m,width=700,height=400)
+        mode="gauge+number",
+        value=risk_score,
+        title={'text':"Flood Risk Index"},
+        gauge={'axis':{'range':[0,100]}}
+
+    ))
+
+    st.plotly_chart(fig,use_container_width=True)
+
+# ---------------------------------------------------
+# MAP
+# ---------------------------------------------------
+
+    st.subheader("Flood Monitoring Map")
+
+    m=folium.Map(location=[lat,lon],zoom_start=7)
+
+    for d,(lt,ln) in district_coords.items():
+
+        rf=np.random.uniform(0,200)
+        rv=np.random.uniform(2,14)
+        tp=np.random.uniform(20,40)
+
+        r=model.predict([[rf,rv,tp]])[0]
+
+        folium.CircleMarker(
+
+            location=[lt,ln],
+            radius=8,
+            popup=f"{d} - {r}",
+            color=status_colors[r],
+            fill=True
+
+        ).add_to(m)
+
+    st_folium(m,width=900,height=500)
 
     if st.button("Weekly Report"):
 
-        st.session_state.page = "weekly_report"
+        st.session_state.page="report"
 
-# ---------------- WEEKLY REPORT ---------------- #
+# ---------------------------------------------------
+# WEEKLY REPORT
+# ---------------------------------------------------
+
 def weekly_report():
 
-    sidebar_info()
+    sidebar()
 
-    st.title("Weekly Flood Trend")
+    st.title("Weekly Flood Trend Analysis")
 
-    st.button("Back", on_click=lambda: st.session_state.update({"page":"monitoring"}))
+    if st.button("Back"):
 
-    district = st.selectbox("District", list(district_coords.keys()))
+        st.session_state.page="dashboard"
 
-    base_rain = current_rainfall[district]
+    district=st.selectbox("District",list(district_coords.keys()))
 
-    dates = [datetime.now() - timedelta(days=i) for i in range(6,-1,-1)]
+    base=np.random.uniform(30,80)
 
-    flood_risk = [min(100,max(0, base_rain*0.6 + np.random.uniform(0,15))) for _ in range(7)]
+    dates=[datetime.now()-timedelta(days=i) for i in range(6,-1,-1)]
 
-    df = pd.DataFrame({
+    risk=[min(100,max(0,base+np.random.uniform(-15,15))) for _ in range(7)]
+
+    df=pd.DataFrame({
+
         "Date":dates,
-        "Flood Risk":flood_risk
+        "Risk":risk
+
     })
 
-    df["Date"] = df["Date"].dt.strftime("%d-%b")
+    df["Date"]=df["Date"].dt.strftime("%d-%b")
 
-    fig,ax = plt.subplots()
+    fig=go.Figure()
 
-    ax.plot(df["Date"],df["Flood Risk"],marker="o")
+    fig.add_trace(go.Scatter(
 
-    ax.set_ylim(0,100)
+        x=df["Date"],
+        y=df["Risk"],
+        mode="lines+markers"
 
-    ax.set_title(f"Weekly Flood Trend - {district}")
+    ))
 
-    plt.grid(True)
+    fig.update_layout(
 
-    st.pyplot(fig)
+        title=f"Weekly Flood Risk Trend - {district}",
+        yaxis_range=[0,100]
 
-# ---------------- MAIN ---------------- #
+    )
+
+    st.plotly_chart(fig,use_container_width=True)
+
+    st.download_button(
+
+        "Download Report",
+        df.to_csv(index=False).encode(),
+        "SAR_Flood_Report.csv"
+
+    )
+
+# ---------------------------------------------------
+# MAIN
+# ---------------------------------------------------
+
 if not st.session_state.logged_in:
 
     login_page()
 
-elif st.session_state.page == "monitoring":
+elif st.session_state.page=="dashboard":
 
-    monitoring_page()
+    dashboard()
 
-elif st.session_state.page == "weekly_report":
+elif st.session_state.page=="report":
 
     weekly_report()
-
-
-
