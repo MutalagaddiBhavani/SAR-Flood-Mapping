@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
 import folium
 from streamlit_folium import st_folium
+from pathlib import Path
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -62,12 +63,14 @@ if "logged_in" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
+if "weather_data" not in st.session_state:
+    st.session_state.weather_data = {}
+
 # ---------------------------------------------------
-# PASSWORD HASHING
+# PASSWORD HASH
 # ---------------------------------------------------
 
 def hash_password(password):
-
     return hashlib.sha256(password.encode()).hexdigest()
 
 # ---------------------------------------------------
@@ -75,7 +78,6 @@ def hash_password(password):
 # ---------------------------------------------------
 
 def load_users():
-
     try:
         with open(USERS_FILE,"r") as f:
             return json.load(f)
@@ -83,49 +85,45 @@ def load_users():
         return {}
 
 def save_users(users):
-
     with open(USERS_FILE,"w") as f:
         json.dump(users,f)
 
 users = load_users()
 
 # ---------------------------------------------------
-# WEATHER API
+# WEATHER API (CACHED)
 # ---------------------------------------------------
 
+@st.cache_data(ttl=600)
 def get_weather(lat,lon):
 
     try:
-
         url=f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
 
-        response=requests.get(url).json()
+        r=requests.get(url).json()
 
-        temp=response["main"]["temp"]
+        temp=r["main"]["temp"]
 
-        rainfall=response.get("rain",{}).get("1h",0)
+        rainfall=r.get("rain",{}).get("1h",0)
 
         return temp,rainfall
 
     except:
 
-        temp=np.random.uniform(25,35)
-        rainfall=np.random.uniform(0,20)
-
-        return temp,rainfall
+        return 30,10
 
 # ---------------------------------------------------
-# RIVER LEVEL SIMULATION
+# RIVER LEVEL
 # ---------------------------------------------------
 
 def river_level():
-
-    return round(np.random.uniform(2,14),2)
+    return 6.5
 
 # ---------------------------------------------------
 # MACHINE LEARNING MODEL
 # ---------------------------------------------------
 
+@st.cache_resource
 def train_model():
 
     data=[]
@@ -169,18 +167,25 @@ model=train_model()
 
 def sidebar():
 
-    st.sidebar.title("SAR Flood Mapping")
+    logo_path = Path("assets/sar_logo.png")
+
+    if logo_path.exists():
+        st.sidebar.image(str(logo_path), use_container_width=True)
+    else:
+        st.sidebar.title("SAR Flood Mapping")
+
+    st.sidebar.markdown("### Flood Monitoring System")
 
     st.sidebar.info("""
 
-SAR Flood Mapping detects flood-prone regions using
+SAR Flood Mapping monitors flood risk using
 
-• Satellite SAR Analysis  
-• Weather Monitoring  
-• Machine Learning  
-• River Level Monitoring  
+• Satellite SAR concepts  
+• Weather monitoring  
+• Machine learning prediction  
+• River level monitoring  
 
-This system helps disaster management teams monitor flood risk in real time.
+Designed for disaster management teams.
 
 """)
 
@@ -192,7 +197,7 @@ def login_page():
 
     sidebar()
 
-    st.title("SAR Flood Mapping - Login")
+    st.title("🌊 SAR Flood Mapping Login")
 
     username=st.text_input("Username")
 
@@ -223,7 +228,7 @@ def login_page():
 
                 save_users(users)
 
-                st.success("User Registered Successfully")
+                st.success("User Registered")
 
 # ---------------------------------------------------
 # DASHBOARD
@@ -236,7 +241,6 @@ def dashboard():
     st.title("🌊 SAR Flood Mapping Dashboard")
 
     if st.button("Logout"):
-
         st.session_state.logged_in=False
         st.session_state.page="login"
 
@@ -244,15 +248,29 @@ def dashboard():
 
     lat,lon=district_coords[district]
 
-    temp,rain=get_weather(lat,lon)
+    if district not in st.session_state.weather_data:
 
-    river=river_level()
+        temp,rain=get_weather(lat,lon)
+
+        river=river_level()
+
+        st.session_state.weather_data[district]={
+
+            "temp":temp,
+            "rain":rain,
+            "river":river
+
+        }
+
+    temp=st.session_state.weather_data[district]["temp"]
+    rain=st.session_state.weather_data[district]["rain"]
+    river=st.session_state.weather_data[district]["river"]
 
     col1,col2,col3=st.columns(3)
 
-    col1.metric("Temperature (°C)",round(temp,1))
-    col2.metric("Rainfall (mm)",rain)
-    col3.metric("River Level (m)",river)
+    col1.metric("Temperature °C",round(temp,1))
+    col2.metric("Rainfall mm",rain)
+    col3.metric("River Level m",river)
 
     prediction=model.predict([[rain,river,temp]])
 
@@ -264,7 +282,7 @@ def dashboard():
     )
 
 # ---------------------------------------------------
-# RISK GAUGE
+# GAUGE
 # ---------------------------------------------------
 
     risk_score={"Safe":25,"Monitoring":50,"Active Alert":75,"Critical":100}[risk]
@@ -290,9 +308,10 @@ def dashboard():
 
     for d,(lt,ln) in district_coords.items():
 
-        rf=np.random.uniform(0,200)
-        rv=np.random.uniform(2,14)
-        tp=np.random.uniform(20,40)
+        rf=st.session_state.weather_data.get(d,{"rain":20})["rain"]
+
+        rv=6
+        tp=30
 
         r=model.predict([[rf,rv,tp]])[0]
 
@@ -309,7 +328,6 @@ def dashboard():
     st_folium(m,width=900,height=500)
 
     if st.button("Weekly Report"):
-
         st.session_state.page="report"
 
 # ---------------------------------------------------
@@ -323,16 +341,15 @@ def weekly_report():
     st.title("Weekly Flood Trend Analysis")
 
     if st.button("Back"):
-
         st.session_state.page="dashboard"
 
     district=st.selectbox("District",list(district_coords.keys()))
 
-    base=np.random.uniform(30,80)
+    base=50
 
     dates=[datetime.now()-timedelta(days=i) for i in range(6,-1,-1)]
 
-    risk=[min(100,max(0,base+np.random.uniform(-15,15))) for _ in range(7)]
+    risk=[base+i*2 for i in range(7)]
 
     df=pd.DataFrame({
 
