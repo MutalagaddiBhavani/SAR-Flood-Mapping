@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
 import folium
 from streamlit_folium import st_folium
-from pathlib import Path
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -67,7 +66,7 @@ if "weather_data" not in st.session_state:
     st.session_state.weather_data = {}
 
 # ---------------------------------------------------
-# PASSWORD HASH
+# PASSWORD HASHING
 # ---------------------------------------------------
 
 def hash_password(password):
@@ -91,33 +90,38 @@ def save_users(users):
 users = load_users()
 
 # ---------------------------------------------------
-# WEATHER API (CACHED)
+# WEATHER API (Cached)
 # ---------------------------------------------------
 
 @st.cache_data(ttl=600)
 def get_weather(lat,lon):
 
     try:
+
         url=f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
 
-        r=requests.get(url).json()
+        response=requests.get(url).json()
 
-        temp=r["main"]["temp"]
+        temp=response["main"]["temp"]
 
-        rainfall=r.get("rain",{}).get("1h",0)
+        rainfall=response.get("rain",{}).get("1h",0)
 
         return temp,rainfall
 
     except:
 
-        return 30,10
+        temp=30
+        rainfall=10
+
+        return temp,rainfall
 
 # ---------------------------------------------------
 # RIVER LEVEL
 # ---------------------------------------------------
 
 def river_level():
-    return 6.5
+
+    return round(np.random.uniform(4,10),2)
 
 # ---------------------------------------------------
 # MACHINE LEARNING MODEL
@@ -167,25 +171,18 @@ model=train_model()
 
 def sidebar():
 
-    logo_path = Path("assets/sar_logo.png")
-
-    if logo_path.exists():
-        st.sidebar.image(str(logo_path), use_container_width=True)
-    else:
-        st.sidebar.title("SAR Flood Mapping")
-
-    st.sidebar.markdown("### Flood Monitoring System")
+    st.sidebar.title("SAR Flood Mapping")
 
     st.sidebar.info("""
 
 SAR Flood Mapping monitors flood risk using
 
 • Satellite SAR concepts  
-• Weather monitoring  
-• Machine learning prediction  
+• Weather Monitoring  
+• Machine Learning prediction  
 • River level monitoring  
 
-Designed for disaster management teams.
+This dashboard helps disaster management authorities monitor flood conditions.
 
 """)
 
@@ -197,7 +194,7 @@ def login_page():
 
     sidebar()
 
-    st.title("🌊 SAR Flood Mapping Login")
+    st.title("SAR Flood Mapping - Login")
 
     username=st.text_input("Username")
 
@@ -228,7 +225,7 @@ def login_page():
 
                 save_users(users)
 
-                st.success("User Registered")
+                st.success("User Registered Successfully")
 
 # ---------------------------------------------------
 # DASHBOARD
@@ -241,6 +238,7 @@ def dashboard():
     st.title("🌊 SAR Flood Mapping Dashboard")
 
     if st.button("Logout"):
+
         st.session_state.logged_in=False
         st.session_state.page="login"
 
@@ -268,9 +266,9 @@ def dashboard():
 
     col1,col2,col3=st.columns(3)
 
-    col1.metric("Temperature °C",round(temp,1))
-    col2.metric("Rainfall mm",rain)
-    col3.metric("River Level m",river)
+    col1.metric("Temperature (°C)",round(temp,1))
+    col2.metric("Rainfall (mm)",rain)
+    col3.metric("River Level (m)",river)
 
     prediction=model.predict([[rain,river,temp]])
 
@@ -282,7 +280,7 @@ def dashboard():
     )
 
 # ---------------------------------------------------
-# GAUGE
+# GAUGE CHART
 # ---------------------------------------------------
 
     risk_score={"Safe":25,"Monitoring":50,"Active Alert":75,"Critical":100}[risk]
@@ -309,7 +307,6 @@ def dashboard():
     for d,(lt,ln) in district_coords.items():
 
         rf=st.session_state.weather_data.get(d,{"rain":20})["rain"]
-
         rv=6
         tp=30
 
@@ -328,6 +325,7 @@ def dashboard():
     st_folium(m,width=900,height=500)
 
     if st.button("Weekly Report"):
+
         st.session_state.page="report"
 
 # ---------------------------------------------------
@@ -341,6 +339,7 @@ def weekly_report():
     st.title("Weekly Flood Trend Analysis")
 
     if st.button("Back"):
+
         st.session_state.page="dashboard"
 
     district=st.selectbox("District",list(district_coords.keys()))
@@ -349,7 +348,7 @@ def weekly_report():
 
     dates=[datetime.now()-timedelta(days=i) for i in range(6,-1,-1)]
 
-    risk=[base+i*2 for i in range(7)]
+    risk=[base + i*2 for i in range(7)]
 
     df=pd.DataFrame({
 
