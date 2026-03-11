@@ -6,12 +6,16 @@ from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
 from sklearn.ensemble import RandomForestClassifier
+import requests
 
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(
     page_title="SAR Flood Monitoring Dashboard",
     layout="wide"
 )
+
+# ---------------- API KEY ---------------- #
+API_KEY = "YOUR_OPENWEATHER_API_KEY"
 
 # ---------------- SESSION STATE ---------------- #
 if "logged_in" not in st.session_state:
@@ -57,10 +61,31 @@ district_coords = {
     "Yadgir": (16.7742, 77.1322)
 }
 
-# ---------------- WEATHER DATA ---------------- #
-current_temps = {district: np.random.randint(29,38) for district in district_coords}
-current_rainfall = {district: np.random.randint(0,20) for district in district_coords}
+# ---------------- WEATHER API ---------------- #
+def get_live_weather(lat, lon):
 
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
+
+    try:
+        response = requests.get(url)
+        data = response.json()
+
+        temp = data["main"]["temp"]
+
+        rainfall = 0
+        if "rain" in data:
+            rainfall = data["rain"].get("1h", 0)
+
+        return temp, rainfall
+
+    except:
+        return np.random.randint(28,36), np.random.randint(0,10)
+
+# ---------------- RIVER LEVEL ---------------- #
+def get_river_level():
+    return round(np.random.uniform(1,15),2)
+
+# ---------------- STATUS COLORS ---------------- #
 status_colors = {
     "Safe":"green",
     "Monitoring":"blue",
@@ -68,7 +93,7 @@ status_colors = {
     "Critical":"red"
 }
 
-# ---------------- ML TRAINING DATA ---------------- #
+# ---------------- TRAINING DATA ---------------- #
 def generate_training_data():
 
     data = []
@@ -102,36 +127,29 @@ y = df["risk"]
 model = RandomForestClassifier()
 model.fit(X,y)
 
-# ---------------- RIVER LEVEL ---------------- #
-def get_river_level():
-    return round(np.random.uniform(1,15),2)
-
-# ---------------- SIDEBAR ---------------- #
-
 # ---------------- SIDEBAR ---------------- #
 def sidebar_info():
 
-    st.sidebar.image("MA-logo.png", use_container_width=True)
-
-    st.sidebar.markdown("## SAR Flood Mapping")
+    st.sidebar.markdown("## 🌊 SAR Flood Mapping")
 
     st.sidebar.markdown(
         """
-SAR-Flood-Mapping detects flood-affected regions using Synthetic Aperture Radar (SAR)
-satellite imagery and machine learning.
+SAR-Flood-Mapping detects flood regions using **SAR satellite imagery**.
 
-It helps disaster management authorities monitor flood risk even during
-cloud cover or night conditions.
+It allows monitoring floods even during:
+
+• Night 🌙  
+• Cloud cover ☁️  
+• Heavy rainfall 🌧  
 """
     )
-
 
 # ---------------- LOGIN PAGE ---------------- #
 def login_page():
 
     sidebar_info()
 
-    st.title("SAR Flood Monitoring Dashboard - Login/Register")
+    st.title("SAR Flood Monitoring Dashboard")
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -166,12 +184,18 @@ def logout():
     st.session_state.logged_in = False
     st.session_state.page = "login"
 
+# ---------------- ALERT SIREN ---------------- #
+def play_siren():
+
+    siren_url = "https://www.soundjay.com/misc/sounds/siren.wav"
+    st.audio(siren_url)
+
 # ---------------- MONITORING PAGE ---------------- #
 def monitoring_page():
 
     sidebar_info()
 
-    st.title("24-Hour Flood Monitoring")
+    st.title("🚨 24-Hour Flood Monitoring")
 
     st.button("Logout", on_click=logout)
 
@@ -179,19 +203,18 @@ def monitoring_page():
 
     lat,lon = district_coords[district]
 
-    temp = current_temps[district]
-    rainfall = current_rainfall[district]
+    temp, rainfall = get_live_weather(lat,lon)
+
     river = get_river_level()
 
     col1,col2,col3 = st.columns(3)
 
-    col1.metric("Temperature °C", temp)
-    col2.metric("Rainfall mm", rainfall)
+    col1.metric("Temperature °C", round(temp,2))
+    col2.metric("Rainfall mm (Live)", rainfall)
     col3.metric("River Level m", river)
 
     # ML Prediction
     prediction = model.predict([[rainfall,river,temp]])
-
     risk = prediction[0]
 
     st.markdown(
@@ -199,7 +222,14 @@ def monitoring_page():
         unsafe_allow_html=True
     )
 
-    # Map
+    # 🚨 ALERT SYSTEM
+    if risk in ["Active Alert","Critical"]:
+
+        st.error("⚠️ FLOOD ALERT ACTIVATED")
+
+        play_siren()
+
+    # ---------------- MAP ---------------- #
     st.markdown("### District Location")
 
     m = folium.Map(location=[lat,lon], zoom_start=9)
@@ -222,17 +252,19 @@ def weekly_report():
 
     sidebar_info()
 
-    st.title("Weekly Flood Trend")
+    st.title("📊 Weekly Flood Trend")
 
     st.button("Back", on_click=lambda: st.session_state.update({"page":"monitoring"}))
 
     district = st.selectbox("District", list(district_coords.keys()))
 
-    base_rain = current_rainfall[district]
+    lat,lon = district_coords[district]
+
+    temp, base_rain = get_live_weather(lat,lon)
 
     dates = [datetime.now() - timedelta(days=i) for i in range(6,-1,-1)]
 
-    flood_risk = [min(100,max(0, base_rain*0.6 + np.random.uniform(0,15))) for _ in range(7)]
+    flood_risk = [min(100,max(0, base_rain*5 + np.random.uniform(0,20))) for _ in range(7)]
 
     df = pd.DataFrame({
         "Date":dates,
