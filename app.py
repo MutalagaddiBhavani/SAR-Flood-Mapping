@@ -7,6 +7,7 @@ import folium
 from streamlit_folium import st_folium
 from sklearn.ensemble import RandomForestClassifier
 import requests
+from twilio.rest import Client
 
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(
@@ -14,8 +15,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- API KEY ---------------- #
-API_KEY = "YOUR_OPENWEATHER_API_KEY"
+# ---------------- API KEYS ---------------- #
+OPENWEATHER_API_KEY = "YOUR_OPENWEATHER_API_KEY"
+
+# ---------------- TWILIO CONFIG ---------------- #
+ACCOUNT_SID = "YOUR_TWILIO_ACCOUNT_SID"
+AUTH_TOKEN = "YOUR_TWILIO_AUTH_TOKEN"
+TWILIO_PHONE = "YOUR_TWILIO_PHONE_NUMBER"
+TARGET_PHONE = "RECEIVER_PHONE_NUMBER"
+
+client = Client(ACCOUNT_SID, AUTH_TOKEN)
 
 # ---------------- SESSION STATE ---------------- #
 if "logged_in" not in st.session_state:
@@ -64,7 +73,7 @@ district_coords = {
 # ---------------- WEATHER API ---------------- #
 def get_live_weather(lat, lon):
 
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
 
     try:
         response = requests.get(url)
@@ -93,7 +102,16 @@ status_colors = {
     "Critical":"red"
 }
 
-# ---------------- TRAINING DATA ---------------- #
+# ---------------- SMS ALERT FUNCTION ---------------- #
+def send_sms_alert(district, risk):
+
+    message = client.messages.create(
+        body=f"⚠️ FLOOD ALERT\nDistrict: {district}\nRisk Level: {risk}\nPlease take precaution.",
+        from_=TWILIO_PHONE,
+        to=TARGET_PHONE
+    )
+
+# ---------------- TRAIN ML MODEL ---------------- #
 def generate_training_data():
 
     data = []
@@ -134,13 +152,13 @@ def sidebar_info():
 
     st.sidebar.markdown(
         """
-SAR-Flood-Mapping detects flood regions using **SAR satellite imagery**.
+Flood detection using **SAR Satellite imagery and AI**
 
-It allows monitoring floods even during:
+Works during:
 
-• Night 🌙  
-• Cloud cover ☁️  
-• Heavy rainfall 🌧  
+• Night  
+• Heavy rain  
+• Cloud cover
 """
     )
 
@@ -184,18 +202,12 @@ def logout():
     st.session_state.logged_in = False
     st.session_state.page = "login"
 
-# ---------------- ALERT SIREN ---------------- #
-def play_siren():
-
-    siren_url = "https://www.soundjay.com/misc/sounds/siren.wav"
-    st.audio(siren_url)
-
 # ---------------- MONITORING PAGE ---------------- #
 def monitoring_page():
 
     sidebar_info()
 
-    st.title("🚨 24-Hour Flood Monitoring")
+    st.title("24-Hour Flood Monitoring")
 
     st.button("Logout", on_click=logout)
 
@@ -215,6 +227,7 @@ def monitoring_page():
 
     # ML Prediction
     prediction = model.predict([[rainfall,river,temp]])
+
     risk = prediction[0]
 
     st.markdown(
@@ -222,12 +235,14 @@ def monitoring_page():
         unsafe_allow_html=True
     )
 
-    # 🚨 ALERT SYSTEM
+    # ---------------- SMS ALERT ---------------- #
     if risk in ["Active Alert","Critical"]:
 
         st.error("⚠️ FLOOD ALERT ACTIVATED")
 
-        play_siren()
+        if st.button("Send SMS Alert"):
+            send_sms_alert(district, risk)
+            st.success("SMS Alert Sent")
 
     # ---------------- MAP ---------------- #
     st.markdown("### District Location")
@@ -244,7 +259,6 @@ def monitoring_page():
     st_folium(m,width=700,height=400)
 
     if st.button("Weekly Report"):
-
         st.session_state.page = "weekly_report"
 
 # ---------------- WEEKLY REPORT ---------------- #
@@ -252,7 +266,7 @@ def weekly_report():
 
     sidebar_info()
 
-    st.title("📊 Weekly Flood Trend")
+    st.title("Weekly Flood Trend")
 
     st.button("Back", on_click=lambda: st.session_state.update({"page":"monitoring"}))
 
